@@ -176,7 +176,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "1057930729110",
   appId: "1:1057930729110:web:dca69c4c0ebd2230d4d4b7"
 };
-const VERSAO = "v4-2026-11-05";
+const VERSAO = "v5-2026-11-05";
 
 /* ===================== utilidades ===================== */
 const DEMO = !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === "COLE_AQUI" || typeof firebase === "undefined";
@@ -312,7 +312,7 @@ function visao5anos(plano) {
 
 /* ===================== estado e roteamento ===================== */
 const S = { tab: "painel", tarefas: [], caixa: [], plano: null, user: null, filtroResp: "", filtroArea: "", mesCaixa: hoje().slice(0, 7),
-  finFixas: [], finLanc: [], finSaldos: [], finCfg: null, finAba: "Marco", finMes: hoje().slice(0, 7) };
+  finFixas: [], finLanc: [], finSaldos: [], finPlan: [], finCfg: null, finAba: "Marco", finMes: hoje().slice(0, 7) };
 let DB, unsubs = [];
 
 function go(tab) {
@@ -381,8 +381,12 @@ function viewPainel() {
   if (aguardando.length) alertas.push(["warn", `${aguardando.length} tarefa(s) aguardando terceiros. Vale cobrar.`]);
   if (P.rendaCasal - P.despesasCasa <= 0) alertas.push(["bad", "O orçamento da casa está no negativo nas premissas do Plano."]);
   const dH = Number(h.slice(8));
-  S.finFixas.filter(f => f.tipo === "despesa" && ativaNoMes(f, mes) && f.dia && !pagFixa(f, mes) && f.dia - dH <= 3)
-    .forEach(f => alertas.push([f.dia < dH ? "bad" : "warn", `${f.dia < dH ? "Conta atrasada" : "Conta vence logo"}: <b>${esc(f.descricao)}</b> (${esc(f.pessoa)}, dia ${f.dia}, ${brl2(f.valor)})`]));
+  itensMes(null, mes).filter(f => f.tipo === "despesa" && f.dia && !f.lanc && f.dia - dH <= 3)
+    .forEach(f => alertas.push([f.dia < dH ? "bad" : "warn", `${f.dia < dH ? "Conta atrasada" : "Conta vence logo"}: <b>${esc(f.descricao)}${f.parcela ? ` ${esc(f.parcela)}` : ""}</b> (${esc(f.pessoa)}, dia ${f.dia}, ${brl2(f.valor)})`]));
+  if (S.finFixas.length) {
+    const prox = Array.from({ length: 12 }, (_, i) => somaMes(mes, i)).find(mm => soma(PESSOAS_FIN.map(p => resumoPessoa(p, mm).saldo)) < 0);
+    if (prox && prox !== mes) alertas.push(["warn", `Pela previsão, a casa fecha ${rotuloMes(prox)} no negativo. Veja Finanças → Conciliação → Próximos 12 meses.`]);
+  }
   if (S.finFixas.length) {
     const rc = PESSOAS_FIN.map(p => resumoPessoa(p, mes)), sob = rc.reduce((a, r) => a + r.renda - r.desp, 0);
     if (sob < 0) alertas.push(["bad", `As finanças da casa fecham ${rotuloMes(mes)} no negativo (${brl(sob)}). Veja a aba Finanças.`]);
@@ -665,23 +669,70 @@ const ativaNoMes = (f, m) => f.ativa !== false && (!f.inicio || f.inicio <= m) &
 const pagFixa = (f, m) => S.finLanc.find(l => l.fixaId === f.id && l.mes === m);
 const soma = arr => arr.reduce((a, x) => a + (Number(x) || 0), 0);
 const finCfg = () => S.finCfg || FIN_PADRAO;
+const mesHoje = () => hoje().slice(0, 7);
+const mesesEntre = (a, b) => { const [ya, ma] = a.split("-").map(Number), [yb, mb] = b.split("-").map(Number); return (yb - ya) * 12 + (mb - ma); };
+// Valor da conta fixa no mês, considerando reajustes ("a partir de").
+function valorFixa(f, m) {
+  const rj = (f.reajustes || []).filter(r => r.desde && r.desde <= m).sort((a, b) => a.desde < b.desde ? -1 : 1).pop();
+  return Number(rj ? rj.valor : f.valor) || 0;
+}
+// Número da parcela do planejado no mês (0 = não ocorre).
+function planNoMes(x, m) { if (!x.mesInicio) return 0; const i = mesesEntre(x.mesInicio, m); return i >= 0 && i < (Number(x.parcelas) || 1) ? i + 1 : 0; }
+const ehVariavel = l => !l.fixaId && !l.planId;
+const pagItem = (it, m) => S.finLanc.find(l => l.mes === m && (it.kind === "fixa" ? l.fixaId === it.id : l.planId === it.id));
+// Contas do mês: fixas ativas + planejados (únicos ou parcelas) de uma pessoa (ou de todos).
+function itensMes(p, m) {
+  const out = [];
+  S.finFixas.filter(f => (!p || f.pessoa === p) && ativaNoMes(f, m)).forEach(f => out.push({ kind: "fixa", id: f.id, src: f, pessoa: f.pessoa, tipo: f.tipo, descricao: f.descricao, categoria: f.categoria, valor: valorFixa(f, m), forma: f.forma, dia: f.dia, fim: f.fim, reajustado: valorFixa(f, m) !== (Number(f.valor) || 0) }));
+  S.finPlan.filter(x => !p || x.pessoa === p).forEach(x => { const n = planNoMes(x, m); if (n) out.push({ kind: "plan", id: x.id, src: x, pessoa: x.pessoa, tipo: x.tipo, descricao: x.descricao, categoria: x.categoria, valor: Number(x.valor) || 0, forma: x.forma, dia: x.dia || null, parcela: (Number(x.parcelas) || 1) > 1 ? `${n}/${x.parcelas}` : "" }); });
+  out.forEach(it => { it.lanc = pagItem(it, m); });
+  return out;
+}
 
 function resumoPessoa(p, m) {
-  const fixas = S.finFixas.filter(f => f.pessoa === p && ativaNoMes(f, m));
-  const vari = S.finLanc.filter(l => l.pessoa === p && l.mes === m && !l.fixaId);
-  const val = f => { const l = pagFixa(f, m); return Number(l ? l.valor : f.valor) || 0; };
-  const recF = soma(fixas.filter(f => f.tipo === "receita").map(val));
-  const despF = soma(fixas.filter(f => f.tipo === "despesa").map(val));
+  const itens = itensMes(p, m);
+  const vari = S.finLanc.filter(l => l.pessoa === p && l.mes === m && ehVariavel(l));
+  const val = it => Number(it.lanc ? it.lanc.valor : it.valor) || 0;
+  const desps = itens.filter(i => i.tipo === "despesa"), recs = itens.filter(i => i.tipo === "receita");
+  const recI = soma(recs.map(val)), despI = soma(desps.map(val));
+  const despF = soma(desps.filter(i => i.kind === "fixa").map(val)), despP = despI - despF;
   const recV = soma(vari.filter(l => l.tipo === "receita").map(l => l.valor));
   const despV = soma(vari.filter(l => l.tipo === "despesa").map(l => l.valor));
-  const pagoF = soma(fixas.filter(f => f.tipo === "despesa" && pagFixa(f, m)).map(val));
+  const pagoI = soma(desps.filter(i => i.lanc).map(val));
   const porCat = {}, porCatV = {};
-  fixas.filter(f => f.tipo === "despesa").forEach(f => porCat[f.categoria] = (porCat[f.categoria] || 0) + val(f));
-  vari.filter(l => l.tipo === "despesa").forEach(l => { const v = Number(l.valor) || 0; porCat[l.categoria] = (porCat[l.categoria] || 0) + v; porCatV[l.categoria] = (porCatV[l.categoria] || 0) + v; });
+  desps.forEach(i => porCat[i.categoria] = (porCat[i.categoria] || 0) + val(i));
+  vari.filter(l => l.tipo === "despesa").forEach(l => { porCatV[l.categoria] = (porCatV[l.categoria] || 0) + (Number(l.valor) || 0); });
+  // Previsão do dia a dia: do mês atual em diante, cada categoria com limite conta pelo maior entre o gasto e o limite.
+  const previsto = m >= mesHoje();
+  const prevCat = { ...porCatV };
+  if (previsto) Object.entries((finCfg().orcamentos || {})[p] || {}).forEach(([c, lim]) => { if (Number(lim) > 0) prevCat[c] = Math.max(prevCat[c] || 0, Number(lim)); });
+  const prevV = soma(Object.values(prevCat));
+  Object.entries(prevCat).forEach(([c, v]) => porCat[c] = (porCat[c] || 0) + v);
   const cartaoMae = soma(S.finLanc.filter(l => l.pessoa === p && l.mes === m && l.tipo === "despesa" && l.forma === "Cartão da mãe").map(l => l.valor));
   const aporte = porCat[CAT_APORTE] || 0, reservaAp = porCat[CAT_RESERVA] || 0;
-  const renda = recF + recV, desp = despF + despV;
-  return { fixas, vari, renda, desp, despF, despV, pago: pagoF + despV, porCat, porCatV, cartaoMae, aporte, reservaAp, consumo: desp - aporte - reservaAp, saldo: renda - desp };
+  const renda = recI + recV, desp = despI + prevV;
+  return { itens, fixas: itens.filter(i => i.kind === "fixa").map(i => i.src), vari, renda, desp, despF, despP, despV, prevV, previsto, pago: pagoI + despV, porCat, porCatV, cartaoMae, aporte, reservaAp, consumo: desp - aporte - reservaAp, saldo: renda - desp };
+}
+
+// Quadro dos próximos 12 meses (a partir do mês atual).
+function quadro12(pessoas) {
+  const ini = mesHoje(); let acum = 0;
+  const linhas = Array.from({ length: 12 }, (_, i) => {
+    const m = somaMes(ini, i), rs = pessoas.map(p => resumoPessoa(p, m));
+    const renda = soma(rs.map(r => r.renda)), desp = soma(rs.map(r => r.desp)), sobra = renda - desp; acum += sobra;
+    return { m, renda, desp, sobra, acum, porPessoa: rs.map(r => r.saldo) };
+  });
+  const maxAbs = Math.max(1, ...linhas.map(l => Math.abs(l.sobra)));
+  const negs = linhas.filter(l => l.sobra < 0);
+  const casal = pessoas.length > 1;
+  return `<div class="panel" style="margin-top:14px">
+    <div class="row"><h2 style="margin:0">Próximos 12 meses</h2><span class="spacer"></span><span class="hint">Clique num mês para abrir</span></div>
+    <p class="hint" style="margin:6px 0 10px">Contas fixas (com reajustes), planejados e, como previsão, os limites do dia a dia. ${negs.length ? `<b class="neg">${negs.length} mês(es) fecham no negativo.</b>` : "Nenhum mês fecha no negativo."}</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Mês</th><th>Entradas</th><th>Saídas previstas</th><th>Sobra</th>${casal ? pessoas.map(p => `<th class="hide-sm">${p}</th>`).join("") : ""}<th class="hide-sm">Acumulado</th></tr></thead><tbody>
+    ${linhas.map(l => `<tr class="${l.m === S.finMes ? "hl" : ""}" data-goto="${l.m}" style="cursor:pointer"><td><button type="button" class="linkbtn" data-goto="${l.m}">${rotuloMes(l.m)}</button></td><td>${brl(l.renda)}</td><td>${brl(l.desp)}</td>
+      <td class="${l.sobra < 0 ? "neg" : "pos"}"><span style="display:inline-block;vertical-align:middle;width:60px;height:6px;border-radius:3px;background:var(--sunk);margin-right:8px;overflow:hidden"><i style="display:block;height:100%;width:${Math.abs(l.sobra) / maxAbs * 100}%;background:${l.sobra < 0 ? "var(--bad)" : "var(--accent)"}"></i></span>${brl(l.sobra)}</td>
+      ${casal ? l.porPessoa.map(v => `<td class="hide-sm ${v < 0 ? "neg" : ""}">${brl(v)}</td>`).join("") : ""}<td class="hide-sm ${l.acum < 0 ? "neg" : ""}">${brl(l.acum)}</td></tr>`).join("")}
+    </tbody></table></div></div>`;
 }
 
 function confirmar(msg, ok = "Sim, excluir") {
@@ -700,6 +751,12 @@ async function addLanc(v) {
   }
   await DB.add("fin_lanc", v);
 }
+async function pagarItem(it, m, valor) {
+  const h = hoje(), data = mesHoje() === m ? h : `${m}-${String(Math.min(28, it.dia || 1)).padStart(2, "0")}`;
+  const v = { mes: m, pessoa: it.pessoa, tipo: it.tipo, categoria: it.categoria, descricao: it.descricao + (it.parcela ? ` (parcela ${it.parcela})` : ""), valor: Number(valor || it.valor) || 0, data, forma: it.forma || "Pix / débito", criadoEm: h };
+  v[it.kind === "fixa" ? "fixaId" : "planId"] = it.id;
+  await addLanc(v);
+}
 async function removeLanc(id) {
   const l = S.finLanc.find(x => x.id === id); if (!l) return;
   if (l.caixaId) { try { await DB.remove("caixa", l.caixaId); } catch (e) {} }
@@ -712,44 +769,62 @@ function viewFinancas() {
   const vazio = !S.finFixas.length && !S.finLanc.length;
   return `<div class="row"><div><h1>Finanças</h1><p class="lead" style="margin:0">O dinheiro de cada um, da casa, e quanto sobra para a reserva e para o projeto.</p></div></div>
   <div style="margin-top:14px">${viewAssist()}</div>
-  <div class="row" style="margin-top:14px">${seg}<span class="spacer"></span><label class="f" style="grid-template-columns:auto auto;align-items:center"><span>Mês</span><input type="month" id="fMes" value="${S.finMes}"></label></div>
+  <div class="row" style="margin-top:14px">${seg}<span class="spacer"></span>
+    <div class="row" style="gap:6px" role="group" aria-label="Escolher mês">
+      <button type="button" class="btn ghost sm" data-mnav="-1" aria-label="Mês anterior">‹</button>
+      <strong style="min-width:70px;text-align:center;font-family:var(--f-display)">${rotuloMes(S.finMes)}</strong>
+      <button type="button" class="btn ghost sm" data-mnav="1" aria-label="Próximo mês">›</button>
+      ${S.finMes !== mesHoje() ? `<button type="button" class="btn ghost sm" data-mnav="0">Hoje</button>` : ""}
+      <input type="month" id="fMes" value="${S.finMes}" aria-label="Ir para o mês" style="width:auto">
+    </div></div>
+  ${S.finMes > mesHoje() ? `<p class="note" style="margin-top:10px">Você está vendo uma <b>previsão</b> de ${rotuloMes(S.finMes)}: contas fixas, planejados e os limites do dia a dia.</p>` : S.finMes < mesHoje() ? `<p class="note" style="margin-top:10px">Mês passado (${rotuloMes(S.finMes)}): mostra o que foi lançado e pago.</p>` : ""}
   ${vazio ? `<div class="panel" style="margin-top:14px"><h2>Começar</h2><p class="hint">Nenhuma conta cadastrada ainda. Cadastre as contas fixas de cada um com "Nova conta fixa", ou importe os dados iniciais que o Claude preparou.</p><div class="row" style="margin-top:10px"><button class="btn" type="button" id="finImport">Importar dados iniciais</button></div></div>` : ""}
   ${aba === "Casal" ? viewCasal() : viewPessoa(aba)}`;
 }
 
 function viewPessoa(p) {
-  const m = S.finMes, r = resumoPessoa(p, m), h = hoje(), mesAtual = h.slice(0, 7) === m, dH = Number(h.slice(8));
+  const m = S.finMes, r = resumoPessoa(p, m), h = hoje(), mesAtual = mesHoje() === m, futuro = m > mesHoje(), dH = Number(h.slice(8));
   const orc = (finCfg().orcamentos || {})[p] || {};
-  const fixasOrd = r.fixas.slice().sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === "receita" ? -1 : 1) || (a.dia || 99) - (b.dia || 99));
-  const linha = f => {
-    const l = pagFixa(f, m), desp = f.tipo === "despesa";
-    const atras = !l && desp && mesAtual && f.dia && f.dia < dH;
-    const vence = !l && desp && mesAtual && f.dia && f.dia >= dH && f.dia - dH <= 3;
-    const semValor = !Number(f.valor);
-    return `<tr class="${atras ? "late" : ""}"><td>${f.dia ? String(f.dia).padStart(2, "0") : "—"}</td>
-      <td style="text-align:left"><button type="button" class="linkbtn" data-efixa="${f.id}">${esc(f.descricao)}</button>${vence ? ` <span class="pill warnp">${f.dia === dH ? "vence hoje" : `vence em ${f.dia - dH} dia(s)`}</span>` : ""}${atras ? ` <span class="pill warnp">atrasada</span>` : ""}${semValor ? ` <span class="pill warnp">informar valor</span>` : ""}${f.fim ? ` <span class="hint">até ${rotuloMes(f.fim)}</span>` : ""}</td>
-      <td style="text-align:left" class="hide-sm">${esc(f.categoria)}</td>
-      <td class="${desp ? "" : "ent"}">${desp ? "" : "+ "}${brl2(l ? l.valor : f.valor)}</td>
-      <td>${l ? `<span class="paid">${desp ? "Pago" : "Recebido"} ✓</span> <button type="button" class="x" data-unpay="${l.id}" aria-label="Desfazer">↺</button>` : `<button type="button" class="btn sm ghost" data-pay="${f.id}">${desp ? "Paguei" : "Recebi"}</button>`}</td></tr>`;
+  const itens = r.itens.slice().sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === "receita" ? -1 : 1) || (a.dia || 99) - (b.dia || 99));
+  const linha = it => {
+    const l = it.lanc, desp = it.tipo === "despesa";
+    const atras = !l && desp && mesAtual && it.dia && it.dia < dH;
+    const vence = !l && desp && mesAtual && it.dia && it.dia >= dH && it.dia - dH <= 3;
+    const semValor = !Number(it.valor);
+    const ed = it.kind === "fixa" ? `data-efixa="${it.id}"` : `data-eplan="${it.id}"`;
+    return `<tr class="${atras ? "late" : ""}"><td>${it.dia ? String(it.dia).padStart(2, "0") : "—"}</td>
+      <td style="text-align:left"><button type="button" class="linkbtn" ${ed}>${esc(it.descricao)}</button>${it.kind === "plan" ? ` <span class="pill">${it.parcela ? `parcela ${esc(it.parcela)}` : "planejado"}</span>` : ""}${vence ? ` <span class="pill warnp">${it.dia === dH ? "vence hoje" : `vence em ${it.dia - dH} dia(s)`}</span>` : ""}${atras ? ` <span class="pill warnp">atrasada</span>` : ""}${semValor ? ` <span class="pill warnp">informar valor</span>` : ""}${it.reajustado ? ` <span class="hint">reajustado</span>` : ""}${it.fim ? ` <span class="hint">até ${rotuloMes(it.fim)}</span>` : ""}</td>
+      <td style="text-align:left" class="hide-sm">${esc(it.categoria)}</td>
+      <td class="${desp ? "" : "ent"}">${desp ? "" : "+ "}${brl2(l ? l.valor : it.valor)}</td>
+      <td>${l ? `<span class="paid">${desp ? "Pago" : "Recebido"} ✓</span> <button type="button" class="x" data-unpay="${l.id}" aria-label="Desfazer">↺</button>` : `<button type="button" class="btn sm ghost" data-pay="${it.kind}:${it.id}">${desp ? "Paguei" : "Recebi"}</button>`}</td></tr>`;
   };
   const cats = Object.entries(r.porCat).sort((a, b) => b[1] - a[1]);
   const maxCat = Math.max(1, ...cats.map(c => c[1]));
   const orcCats = [...new Set([...Object.keys(orc).filter(k => Number(orc[k]) > 0), ...Object.keys(r.porCatV)])].filter(c => c !== CAT_APORTE && c !== CAT_RESERVA);
   const vari = r.vari.slice().sort((a, b) => a.data < b.data ? 1 : -1);
+  const planos = S.finPlan.filter(x => x.pessoa === p).sort((a, b) => (a.mesInicio || "") < (b.mesInicio || "") ? -1 : 1);
+  const fimPlan = x => somaMes(x.mesInicio, (Number(x.parcelas) || 1) - 1);
+  const planAtivos = planos.filter(x => x.mesInicio && fimPlan(x) >= mesHoje());
   return `
   <div class="grid g4" style="margin-top:14px">
-    <div class="panel stat"><div class="k">Entradas do mês</div><div class="v pos">${brl(r.renda)}</div><div class="s">${p}</div></div>
-    <div class="panel stat"><div class="k">Saídas previstas</div><div class="v">${brl(r.desp)}</div><div class="s">Fixas ${brl(r.despF)} · dia a dia ${brl(r.despV)}</div></div>
+    <div class="panel stat"><div class="k">Entradas ${futuro ? "previstas" : "do mês"}</div><div class="v pos">${brl(r.renda)}</div><div class="s">${p} · ${rotuloMes(m)}</div></div>
+    <div class="panel stat"><div class="k">Saídas previstas</div><div class="v">${brl(r.desp)}</div><div class="s">Fixas ${brl(r.despF)}${r.despP ? ` · planejados ${brl(r.despP)}` : ""} · dia a dia ${brl(r.prevV)}${r.previsto && r.prevV > r.despV ? " (previsão)" : ""}</div></div>
     <div class="panel stat"><div class="k">Já pago</div><div class="v">${brl(r.pago)}</div><div class="s">Falta pagar ${brl(Math.max(0, r.desp - r.pago))}</div></div>
     <div class="panel stat"><div class="k">Sobra prevista</div><div class="v ${r.saldo < 0 ? "neg" : "pos"}">${brl(r.saldo)}</div><div class="s">${r.renda ? `Fixas usam ${num(r.despF / r.renda * 100)}% da renda` : "Cadastre a renda"}</div></div>
   </div>
   ${r.cartaoMae ? `<div class="alert bad" style="margin-top:14px"><b class="dot"></b><div>Neste mês ${p === "Marco" ? "você usou" : "foi usado"} <b>${brl2(r.cartaoMae)}</b> no cartão da mãe. Esse valor precisa ser devolvido a ela e já está contado nas saídas.</div></div>` : ""}
 
   <div class="panel" style="margin-top:14px">
-    <div class="row"><h2 style="margin:0">Contas fixas de ${rotuloMes(m)}</h2><span class="spacer"></span><button class="btn ghost" type="button" id="novaFixa">Nova conta fixa</button></div>
-    <p class="hint" style="margin:6px 0 10px">Cadastradas uma vez, aparecem todo mês. Clique no nome para editar. Marque "Paguei" quando pagar.</p>
-    ${fixasOrd.length ? `<div class="tbl-wrap"><table><thead><tr><th>Dia</th><th style="text-align:left">Conta</th><th style="text-align:left" class="hide-sm">Categoria</th><th>Valor</th><th></th></tr></thead><tbody>${fixasOrd.map(linha).join("")}</tbody></table></div>` : `<div class="empty">Nenhuma conta fixa para ${esc(p)} neste mês.</div>`}
+    <div class="row"><h2 style="margin:0">Contas de ${rotuloMes(m)}</h2><span class="spacer"></span><button class="btn ghost" type="button" id="novaFixa">Nova conta fixa</button><button class="btn ghost" type="button" id="novoPlan">Novo planejado</button></div>
+    <p class="hint" style="margin:6px 0 10px">Fixas repetem todo mês. Planejados aparecem só nos meses escolhidos (único ou parcelado). Clique no nome para editar.</p>
+    ${itens.length ? `<div class="tbl-wrap"><table><thead><tr><th>Dia</th><th style="text-align:left">Conta</th><th style="text-align:left" class="hide-sm">Categoria</th><th>Valor</th><th></th></tr></thead><tbody>${itens.map(linha).join("")}</tbody></table></div>` : `<div class="empty">Nenhuma conta para ${esc(p)} em ${rotuloMes(m)}.</div>`}
+    ${planAtivos.length ? `<details style="margin-top:12px"><summary class="hint" style="cursor:pointer">Todos os planejados de ${esc(p)} (${planAtivos.length})</summary>
+      <div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th style="text-align:left">Planejado</th><th>Quando</th><th>Parcela</th><th>Total</th></tr></thead><tbody>
+      ${planAtivos.map(x => `<tr><td style="text-align:left"><button type="button" class="linkbtn" data-eplan="${x.id}">${esc(x.descricao)}</button>${x.tipo === "receita" ? ` <span class="pill">entrada</span>` : ""}</td><td>${(Number(x.parcelas) || 1) > 1 ? `${rotuloMes(x.mesInicio)} a ${rotuloMes(fimPlan(x))}` : rotuloMes(x.mesInicio)}</td><td>${(Number(x.parcelas) || 1) > 1 ? `${x.parcelas}x ${brl2(x.valor)}` : "único"}</td><td>${brl2((Number(x.valor) || 0) * (Number(x.parcelas) || 1))}</td></tr>`).join("")}
+      </tbody></table></div></details>` : ""}
   </div>
+
+  ${quadro12([p])}
 
   <div class="grid g2" style="margin-top:14px">
     <form class="panel" id="fV"><h2>Gasto do dia a dia</h2>
@@ -764,7 +839,7 @@ function viewPessoa(p) {
       <div class="row" style="margin-top:12px"><button class="btn" type="submit">Lançar</button><span class="hint">"${CAT_APORTE}" também entra no Caixa do projeto.</span></div>
     </form>
     <div class="panel"><div class="row"><h2 style="margin:0">Limites do dia a dia</h2><span class="spacer"></span><button class="btn ghost sm" type="button" id="editOrc">Definir limites</button></div>
-      <p class="hint" style="margin:6px 0 10px">Quanto pode gastar por mês em cada categoria variável.</p>
+      <p class="hint" style="margin:6px 0 10px">Quanto pode gastar por mês em cada categoria variável. Nos meses futuros, entram como previsão.</p>
       ${orcCats.length ? orcCats.map(c => { const g = r.porCatV[c] || 0, lim = Number(orc[c]) || 0, pct = lim ? g / lim * 100 : 100, cls = !lim ? "" : pct > 100 ? "bad" : pct > 80 ? "warn" : "";
         return `<div class="catrow"><div>${esc(c)}</div><div class="bar"><i class="${cls}" style="width:${Math.min(100, pct)}%"></i></div><div class="r">${brl(g)}${lim ? ` de ${brl(lim)}` : ""}</div></div>`; }).join("") : `<div class="empty">Sem limites definidos.</div>`}
     </div>
@@ -776,7 +851,8 @@ function viewPessoa(p) {
       ${vari.map(l => `<tr><td>${esc(l.data.split("-").reverse().slice(0, 2).join("/"))}</td><td style="text-align:left">${esc(l.descricao || "—")}</td><td style="text-align:left">${esc(l.categoria)}<br><span class="hint">${esc(l.forma || "")}</span></td><td class="${l.tipo === "receita" ? "ent" : "sai"}">${l.tipo === "receita" ? "+" : "−"} ${brl2(l.valor)}</td><td><button type="button" class="x" data-dlanc="${l.id}" aria-label="Excluir lançamento">×</button></td></tr>`).join("")}
       </tbody></table></div>` : `<div class="empty">Nenhum gasto lançado em ${rotuloMes(m)}.</div>`}
     </div>
-    <div class="panel"><h2>Para onde foi o dinheiro</h2>
+    <div class="panel"><h2>${r.previsto ? "Para onde vai o dinheiro" : "Para onde foi o dinheiro"}</h2>
+      ${r.previsto ? `<p class="hint" style="margin:-4px 0 8px">Inclui os limites do dia a dia como previsão.</p>` : ""}
       ${cats.length ? cats.map(([c, v]) => `<div class="catrow"><div>${esc(c)}</div><div class="bar"><i style="width:${v / maxCat * 100}%"></i></div><div class="r">${brl(v)}${r.renda ? ` · ${num(v / r.renda * 100)}%` : ""}</div></div>`).join("") : `<div class="empty">Sem saídas neste mês.</div>`}
     </div>
   </div>`;
@@ -785,12 +861,14 @@ function viewPessoa(p) {
 function bindPessoa(p) {
   const m = S.finMes;
   $("#novaFixa").addEventListener("click", () => abrirFixa(null, p));
+  $("#novoPlan").addEventListener("click", () => abrirPlan(null, p));
+  document.querySelectorAll("[data-eplan]").forEach(b => b.addEventListener("click", () => abrirPlan(b.dataset.eplan, p)));
   $("#editOrc").addEventListener("click", () => abrirOrc(p));
   document.querySelectorAll("[data-efixa]").forEach(b => b.addEventListener("click", () => abrirFixa(b.dataset.efixa, p)));
   document.querySelectorAll("[data-pay]").forEach(b => b.addEventListener("click", async () => {
-    const f = S.finFixas.find(x => x.id === b.dataset.pay); if (!f) return;
-    const h = hoje(), data = h.slice(0, 7) === m ? h : `${m}-${String(Math.min(28, f.dia || 1)).padStart(2, "0")}`;
-    try { await addLanc({ fixaId: f.id, mes: m, pessoa: f.pessoa, tipo: f.tipo, categoria: f.categoria, descricao: f.descricao, valor: Number(f.valor) || 0, data, forma: f.forma || "Pix / débito", criadoEm: h }); toast(f.tipo === "despesa" ? "Marcado como pago." : "Marcado como recebido."); } catch (e) { toast("Não foi possível salvar."); }
+    const [kind, id] = b.dataset.pay.split(":");
+    const it = itensMes(p, m).find(x => x.kind === kind && x.id === id); if (!it) return;
+    try { await pagarItem(it, m); toast(it.tipo === "despesa" ? "Marcado como pago." : "Marcado como recebido."); } catch (e) { toast("Não foi possível salvar."); }
   }));
   document.querySelectorAll("[data-unpay]").forEach(b => b.addEventListener("click", async () => { try { await removeLanc(b.dataset.unpay); toast("Desfeito."); } catch (e) { toast("Não foi possível desfazer."); } }));
   document.querySelectorAll("[data-dlanc]").forEach(b => b.addEventListener("click", async () => { if (await confirmar("Excluir este lançamento?")) { try { await removeLanc(b.dataset.dlanc); toast("Lançamento excluído."); } catch (e) { toast("Não foi possível excluir."); } } }));
@@ -823,18 +901,65 @@ function abrirFixa(id, pessoa) {
       <label class="f"><span>Termina em (opcional)</span><input type="month" id="xFim" value="${esc(f.fim || "")}"></label>
     </div>
     <label class="row" style="gap:8px"><input type="checkbox" id="xAtiva" ${f.ativa !== false ? "checked" : ""}> Conta ativa</label>
+    <fieldset style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:8px"><legend class="hint" style="padding:0 6px">Reajuste de valor</legend>
+      <div id="rjList"></div>
+      <div class="form-grid"><label class="f"><span>Novo valor (R$)</span><input type="number" id="xRjVal" step="0.01" min="0"></label><label class="f"><span>A partir de</span><input type="month" id="xRjMes"></label></div>
+      <p class="hint" style="margin:0">Os meses anteriores continuam com o valor antigo.</p>
+    </fieldset>
     <div class="row">${id ? `<button type="button" class="btn danger" id="xDel">Excluir</button>` : ""}<span class="spacer"></span><button type="button" class="btn ghost" id="xCancel">Cancelar</button><button class="btn" type="submit">Salvar</button></div>
   </form>`;
   dlg.showModal();
+  let rjs = (f.reajustes || []).slice().sort((a, b) => a.desde < b.desde ? -1 : 1);
+  const drawRj = () => { const el = $("#rjList"); el.innerHTML = rjs.length ? rjs.map((r, i) => `<div class="row" style="gap:8px;font-size:.9rem">A partir de <b>${rotuloMes(r.desde)}</b>: ${brl2(r.valor)} <button type="button" class="x" data-rmrj="${i}" aria-label="Remover reajuste">×</button></div>`).join("") : `<span class="hint">Nenhum reajuste. Valor base: ${brl2(f.valor || 0)}.</span>`; el.querySelectorAll("[data-rmrj]").forEach(b => b.addEventListener("click", () => { rjs.splice(Number(b.dataset.rmrj), 1); drawRj(); })); };
+  drawRj();
   $("#xTipo").addEventListener("change", () => { $("#xCat").innerHTML = cats($("#xTipo").value); });
   $("#xCancel").addEventListener("click", () => dlg.close());
   if (id) $("#xDel").addEventListener("click", async () => { dlg.close(); if (await confirmar(`Excluir a conta fixa "${f.descricao}"? Os pagamentos já marcados continuam no histórico.`)) { try { await DB.remove("fin_fixas", id); toast("Conta excluída."); } catch (e) { toast("Não foi possível excluir."); } } });
   $("#fF").addEventListener("submit", async e => {
     e.preventDefault();
-    const v = { pessoa: $("#xPes").value, tipo: $("#xTipo").value, descricao: $("#xDesc").value.trim(), categoria: $("#xCat").value, valor: Number($("#xVal").value) || 0, dia: Number($("#xDia").value) || null, forma: $("#xForma").value, inicio: $("#xIni").value || S.finMes, fim: $("#xFim").value || "", ativa: $("#xAtiva").checked, atualizadoEm: hoje() };
+    const rjVal = Number($("#xRjVal").value), rjMes = $("#xRjMes").value;
+    if (rjVal > 0 && rjMes) { rjs = rjs.filter(r => r.desde !== rjMes); rjs.push({ desde: rjMes, valor: rjVal }); }
+    const v = { pessoa: $("#xPes").value, tipo: $("#xTipo").value, descricao: $("#xDesc").value.trim(), categoria: $("#xCat").value, valor: Number($("#xVal").value) || 0, dia: Number($("#xDia").value) || null, forma: $("#xForma").value, inicio: $("#xIni").value || S.finMes, fim: $("#xFim").value || "", ativa: $("#xAtiva").checked, reajustes: rjs, atualizadoEm: hoje() };
     if (!v.descricao) return;
     dlg.close();
     try { if (id) await DB.update("fin_fixas", id, v); else await DB.add("fin_fixas", { ...v, criadoEm: hoje() }); toast("Conta salva."); } catch (err) { toast("Não foi possível salvar."); }
+  });
+}
+
+function abrirPlan(id, pessoa) {
+  const x = id ? S.finPlan.find(y => y.id === id) : { pessoa, tipo: "despesa", descricao: "", categoria: "Outros", valor: "", parcelas: 1, mesInicio: S.finMes > mesHoje() ? S.finMes : somaMes(mesHoje(), 1), forma: "Pix / débito", dia: "" };
+  if (!x) return;
+  const dlg = $("#dlg");
+  const cats = t => (t === "receita" ? CAT_REC : CAT_DESP).map(c => `<option ${x.categoria === c ? "selected" : ""}>${c}</option>`).join("");
+  dlg.innerHTML = `<form method="dialog" id="fP">
+    <h2>${id ? "Editar planejado" : "Novo planejado"}</h2>
+    <p class="hint" style="margin:0">Gasto ou entrada que não se repete todo mês: IPVA, material escolar, 13º, uma compra parcelada.</p>
+    <label class="f"><span>Nome</span><input type="text" id="pDesc" required value="${esc(x.descricao)}" placeholder="Ex.: IPVA do carro"></label>
+    <div class="form-grid">
+      <label class="f"><span>Pessoa</span><select id="pPes">${PESSOAS_FIN.map(p => `<option ${x.pessoa === p ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+      <label class="f"><span>Tipo</span><select id="pTipo"><option value="despesa" ${x.tipo === "despesa" ? "selected" : ""}>Saída</option><option value="receita" ${x.tipo === "receita" ? "selected" : ""}>Entrada</option></select></label>
+      <label class="f"><span>Categoria</span><select id="pCat">${cats(x.tipo)}</select></label>
+      <label class="f"><span>Valor de cada parcela (R$)</span><input type="number" id="pVal" step="0.01" min="0" required value="${esc(x.valor)}"></label>
+      <label class="f"><span>Nº de parcelas</span><input type="number" id="pParc" min="1" max="120" value="${esc(x.parcelas || 1)}"></label>
+      <label class="f"><span>Primeiro mês</span><input type="month" id="pIni" required value="${esc(x.mesInicio || "")}"></label>
+      <label class="f"><span>Dia (opcional)</span><input type="number" id="pDia" min="1" max="31" value="${esc(x.dia || "")}"></label>
+      <label class="f"><span>Paga com</span><select id="pForma">${FORMAS.map(c => `<option ${x.forma === c ? "selected" : ""}>${c}</option>`).join("")}</select></label>
+    </div>
+    <p class="hint" id="pResumo" style="margin:0"></p>
+    <div class="row">${id ? `<button type="button" class="btn danger" id="pDel">Excluir</button>` : ""}<span class="spacer"></span><button type="button" class="btn ghost" id="pCancel">Cancelar</button><button class="btn" type="submit">Salvar</button></div>
+  </form>`;
+  dlg.showModal();
+  const resumo = () => { const v = Number($("#pVal").value) || 0, n = Math.max(1, Number($("#pParc").value) || 1), ini = $("#pIni").value; $("#pResumo").textContent = ini ? (n > 1 ? `${n} parcelas de ${brl2(v)}, de ${rotuloMes(ini)} a ${rotuloMes(somaMes(ini, n - 1))}. Total ${brl2(v * n)}.` : `Valor único de ${brl2(v)} em ${rotuloMes(ini)}.`) : ""; };
+  ["#pVal", "#pParc", "#pIni"].forEach(s => $(s).addEventListener("input", resumo)); resumo();
+  $("#pTipo").addEventListener("change", () => { $("#pCat").innerHTML = cats($("#pTipo").value); });
+  $("#pCancel").addEventListener("click", () => dlg.close());
+  if (id) $("#pDel").addEventListener("click", async () => { dlg.close(); if (await confirmar(`Excluir o planejado "${x.descricao}"? Os pagamentos já marcados continuam no histórico.`)) { try { await DB.remove("fin_plan", id); toast("Planejado excluído."); } catch (e) { toast("Não foi possível excluir."); } } });
+  $("#fP").addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = { pessoa: $("#pPes").value, tipo: $("#pTipo").value, descricao: $("#pDesc").value.trim(), categoria: $("#pCat").value, valor: Number($("#pVal").value) || 0, parcelas: Math.max(1, Math.round(Number($("#pParc").value) || 1)), mesInicio: $("#pIni").value, dia: Number($("#pDia").value) || null, forma: $("#pForma").value, atualizadoEm: hoje() };
+    if (!v.descricao || !v.mesInicio || !v.valor) return toast("Preencha nome, valor e primeiro mês.");
+    dlg.close();
+    try { if (id) await DB.update("fin_plan", id, v); else await DB.add("fin_plan", { ...v, criadoEm: hoje() }); toast("Planejado salvo."); } catch (err) { toast("Não foi possível salvar."); }
   });
 }
 
@@ -902,10 +1027,12 @@ function viewCasal() {
     <div class="health">${ind.map(([k, v, l, s]) => `<div class="hcard ${l}"><div class="k">${k}</div><div class="v">${v}</div><div class="lvl ${l}">${ROTULO_NIVEL[l]}</div><div class="hint">${s}</div></div>`).join("")}</div>
   </div>
 
+  ${quadro12(PESSOAS_FIN)}
+
   <div class="grid g2" style="margin-top:14px">
     <div class="panel"><h2>Quem paga o quê</h2>
-      <div class="tbl-wrap"><table><thead><tr><th>Pessoa</th><th>Entradas</th><th>Fixas</th><th>Dia a dia</th><th>Sobra</th></tr></thead><tbody>
-      ${d.rs.map(r => `<tr><td>${r.p}</td><td>${brl(r.renda)}</td><td>${brl(r.despF)}</td><td>${brl(r.despV)}</td><td class="${r.saldo < 0 ? "neg" : "pos"}">${brl(r.saldo)}</td></tr>`).join("")}
+      <div class="tbl-wrap"><table><thead><tr><th>Pessoa</th><th>Entradas</th><th>Fixas</th><th>Planejados e dia a dia</th><th>Sobra</th></tr></thead><tbody>
+      ${d.rs.map(r => `<tr><td>${r.p}</td><td>${brl(r.renda)}</td><td>${brl(r.despF)}</td><td>${brl(r.desp - r.despF)}</td><td class="${r.saldo < 0 ? "neg" : "pos"}">${brl(r.saldo)}</td></tr>`).join("")}
       <tr class="hl"><td><b>Casal</b></td><td>${brl(d.renda)}</td><td>${brl(d.despF)}</td><td>${brl(d.desp - d.despF)}</td><td class="${d.renda - d.desp < 0 ? "neg" : "pos"}">${brl(d.renda - d.desp)}</td></tr>
       </tbody></table></div>
       ${d.rs.some(r => r.saldo < 0) ? `<p class="note" style="margin-top:10px">${d.rs.filter(r => r.saldo < 0).map(r => r.p).join(" e ")} fecha o mês no negativo sozinho. A conta da casa só fecha com a renda do outro.</p>` : ""}
@@ -965,7 +1092,10 @@ function resumoTexto() {
     L.push(`Casal: renda ${brl2(d.renda)} | custo da casa ${brl2(d.consumo)} | sobra ${brl2(d.sobra)} | reserva ${brl2(d.reservaAp)} | aporte no projeto ${brl2(d.aporte)}`, "");
   }
   L.push("## Contas fixas cadastradas");
-  S.finFixas.filter(f => f.ativa !== false).forEach(f => L.push(`- ${f.pessoa} · ${f.tipo === "receita" ? "entrada" : "saída"} · ${f.descricao} (${f.categoria}) ${brl2(f.valor)}${f.dia ? ` · dia ${f.dia}` : ""}${f.fim ? ` · até ${f.fim}` : ""} · ${f.forma || ""}`));
+  S.finFixas.filter(f => f.ativa !== false).forEach(f => L.push(`- ${f.pessoa} · ${f.tipo === "receita" ? "entrada" : "saída"} · ${f.descricao} (${f.categoria}) ${brl2(f.valor)}${(f.reajustes || []).length ? ` · reajustes: ${f.reajustes.map(r => `${r.desde} ${brl2(r.valor)}`).join(", ")}` : ""}${f.dia ? ` · dia ${f.dia}` : ""}${f.fim ? ` · até ${f.fim}` : ""} · ${f.forma || ""}`));
+  if (S.finPlan.length) { L.push("", "## Planejados"); S.finPlan.forEach(x => L.push(`- ${x.pessoa} · ${x.tipo === "receita" ? "entrada" : "saída"} · ${x.descricao} (${x.categoria}) ${(Number(x.parcelas) || 1) > 1 ? `${x.parcelas}x ${brl2(x.valor)} de ${x.mesInicio} a ${somaMes(x.mesInicio, x.parcelas - 1)}` : `${brl2(x.valor)} em ${x.mesInicio}`}`)); }
+  L.push("", "## Próximos 12 meses (previsão do casal)");
+  Array.from({ length: 12 }, (_, i) => somaMes(mesHoje(), i)).forEach(mm => { const rs = PESSOAS_FIN.map(p => resumoPessoa(p, mm)); L.push(`- ${rotuloMes(mm)}: entradas ${brl2(soma(rs.map(r => r.renda)))} | saídas ${brl2(soma(rs.map(r => r.desp)))} | sobra ${brl2(soma(rs.map(r => r.saldo)))}`); });
   L.push("", "## Saldos e dívidas");
   S.finSaldos.forEach(s => L.push(`- ${s.nome} (${s.pessoa}, ${s.tipo}): ${brl2(s.valor)}`));
   const o = finCfg().orcamentos || {};
@@ -1027,7 +1157,9 @@ function bindCasal() {
 function bindFinancas() {
   bindAssist();
   document.querySelectorAll("[data-fin]").forEach(b => b.addEventListener("click", () => { S.finAba = b.dataset.fin; render(); }));
-  $("#fMes").addEventListener("change", e => { S.finMes = e.target.value || hoje().slice(0, 7); render(); });
+  $("#fMes").addEventListener("change", e => { S.finMes = e.target.value || mesHoje(); render(); });
+  document.querySelectorAll("[data-mnav]").forEach(b => b.addEventListener("click", () => { const k = Number(b.dataset.mnav); S.finMes = k === 0 ? mesHoje() : somaMes(S.finMes, k); render(); }));
+  document.querySelectorAll("[data-goto]").forEach(b => b.addEventListener("click", e => { e.stopPropagation(); S.finMes = b.dataset.goto; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }));
   const im = $("#finImport"); if (im) im.addEventListener("click", abrirImport);
   if (S.finAba === "Casal") bindCasal(); else bindPessoa(S.finAba);
 }
@@ -1064,16 +1196,25 @@ const tokens = s => norm(s).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !/^
 function acharFixa(n, mes, tipo) {
   const ts = new Set(tokens(n));
   if (!ts.size) return null;
-  const cands = S.finFixas.filter(f => f.tipo === tipo && ativaNoMes(f, mes));
+  const cands = itensMes(null, mes).filter(it => it.tipo === tipo);
   let top = 0, tops = [];
-  for (const f of cands) {
-    const hit = [...new Set(tokens(f.descricao))].filter(w => ts.has(w));
+  for (const it of cands) {
+    const hit = [...new Set(tokens(it.descricao))].filter(w => ts.has(w));
     if (!hit.some(w => !NOMES.has(w))) continue;
-    if (hit.length > top) { top = hit.length; tops = [f]; } else if (hit.length === top) tops.push(f);
+    if (hit.length > top) { top = hit.length; tops = [it]; } else if (hit.length === top) tops.push(it);
   }
   if (!tops.length) return null;
   if (tops.length > 1) return { ambiguas: tops };
-  return { f: tops[0], jaPaga: !!pagFixa(tops[0], mes) };
+  return { f: tops[0], jaPaga: !!tops[0].lanc };
+}
+// Mês citado no texto: "dezembro", "em janeiro", "mês que vem", "próximo mês".
+const NOMES_MES = ["janeiro", "fevereiro", "marco", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+function mesCitado(n) {
+  if (/mes que vem|proximo mes/.test(n)) return somaMes(mesHoje(), 1);
+  if (/mes passado/.test(n)) return somaMes(mesHoje(), -1);
+  const i = NOMES_MES.findIndex(w => temPalavra(n, w)); if (i < 0) return null;
+  const [y, mm] = mesHoje().split("-").map(Number);
+  return `${i + 1 < mm ? y + 1 : y}-${String(i + 1).padStart(2, "0")}`;
 }
 function interpretar(txt, opts = {}) {
   let n = norm(txt).trim();
@@ -1087,7 +1228,15 @@ function interpretar(txt, opts = {}) {
   let valor = 0;
   if (mv) { let vs = mv[1]; vs = vs.includes(",") ? vs.replace(/\./g, "").replace(",", ".") : (/^\d{1,3}(\.\d{3})+$/.test(vs) ? vs.replace(/\./g, "") : vs); valor = Number(vs); }
   const receita = /(^|\s)(recebi|ganhei|entrou|entrada|vendi|salario|pagamento recebido)(\s|$)/.test(n);
-  const fx = opts.semFixa ? null : acharFixa(n, data.slice(0, 7), receita ? "receita" : "despesa");
+  const mesTxt = mesCitado(n); if (mesTxt && !md && !temPalavra(n, "ontem")) data = mesTxt === mesHoje() ? hoje() : `${mesTxt}-01`;
+  let fx = opts.semFixa ? null : acharFixa(n, data.slice(0, 7), receita ? "receita" : "despesa");
+  // Sem mês citado e nada no mês atual: procura o próximo mês em que esse planejado aparece ainda não pago.
+  if (!fx && !opts.semFixa && !mesTxt && !md) {
+    for (let i = 1; i < 12 && !fx; i++) {
+      const mm = somaMes(data.slice(0, 7), i), cand = acharFixa(n, mm, receita ? "receita" : "despesa");
+      if (cand && !cand.ambiguas && cand.f.kind === "plan" && !cand.jaPaga) { fx = cand; data = `${mm}-01`; }
+    }
+  }
   if (fx && fx.ambiguas) return { tipo: "ambigua", lista: fx.ambiguas, mes: data.slice(0, 7), valor, data };
   if (fx) return { tipo: "fixa", f: fx.f, mes: data.slice(0, 7), valor, data, jaPaga: fx.jaPaga };
   if (!mv) return { tipo: "erro", msg: "Não encontrei o valor nem uma conta fixa com esse nome. Escreva, por exemplo: mercado 85" };
@@ -1102,7 +1251,7 @@ function interpretar(txt, opts = {}) {
   return { tipo: "lanc", v: { pessoa, tipo: receita ? "receita" : "despesa", valor, categoria, data, mes: data.slice(0, 7), forma, descricao: String(txt).trim().slice(0, 80), criadoEm: hoje(), autor: S.user?.email || "demo", origem: "assistente" } };
 }
 function responder(n) {
-  const m = hoje().slice(0, 7), mesRef = /mes passado/.test(n) ? somaMes(m, -1) : m;
+  const m = mesHoje(), mesRef = mesCitado(n) || m;
   const casal = /(^|\s)(nos|casal|a gente|casa|familia)(\s|\?|$)/.test(n);
   const p = temPalavra(n, "marina") ? "Marina" : temPalavra(n, "marco") ? "Marco" : pessoaPadrao();
   const quem = casal ? PESSOAS_FIN : [p], rot = casal ? "o casal" : p;
@@ -1113,10 +1262,10 @@ function responder(n) {
     const div = soma(S.finSaldos.filter(s => s.tipo === "Dívida" && /mae/.test(norm(s.nome))).map(s => s.valor));
     return `Em ${rm}, ${rot} lançou ${brl2(tot)} no cartão da mãe. Saldo a devolver registrado em Saldos e dívidas: ${brl2(div)}.`;
   }
-  if (/falta pagar|a pagar|vence|vencimento|pendente|contas do mes/.test(n)) {
-    const pend = S.finFixas.filter(f => quem.includes(f.pessoa) && f.tipo === "despesa" && ativaNoMes(f, m) && !pagFixa(f, m)).sort((a, b) => (a.dia || 99) - (b.dia || 99));
-    if (!pend.length) return `Nenhuma conta fixa pendente em ${rotuloMes(m)} para ${rot}.`;
-    return `Faltam ${pend.length} contas (${brl2(soma(pend.map(f => f.valor)))}): ` + pend.map(f => `${f.descricao} ${brl2(f.valor)}${f.dia ? ` (dia ${f.dia})` : ""}`).join("; ") + ".";
+  if (/falta pagar|a pagar|pagar|vence|vencimento|pendente|contas do mes|contas de/.test(n)) {
+    const pend = itensMes(null, mesRef).filter(it => quem.includes(it.pessoa) && it.tipo === "despesa" && !it.lanc).sort((a, b) => (a.dia || 99) - (b.dia || 99));
+    if (!pend.length) return `Nenhuma conta pendente em ${rm} para ${rot}.`;
+    return `${mesRef === m ? "Faltam" : `Em ${rm}, são`} ${pend.length} contas (${brl2(soma(pend.map(f => f.valor)))}): ` + pend.map(f => `${f.descricao}${f.parcela ? ` ${f.parcela}` : ""} ${brl2(f.valor)}${f.dia ? ` (dia ${f.dia})` : ""}`).join("; ") + ".";
   }
   if (/projeto|caixa/.test(n)) {
     const sc = S.caixa.reduce((a, c) => a + (c.tipo === "entrada" ? 1 : -1) * Number(c.valor || 0), 0);
@@ -1156,7 +1305,7 @@ function bindAssist() {
     if (r.tipo === "ambigua") {
       dizer(`Encontrei ${r.lista.length} contas fixas parecidas. Qual delas?`, "");
       const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "8px";
-      r.lista.forEach(f => { const b = document.createElement("button"); b.type = "button"; b.className = "btn sm ghost"; b.textContent = `${f.descricao} (${brl2(f.valor)})`; b.addEventListener("click", () => mostrarFixa({ f, mes: r.mes, valor: r.valor, data: r.data, jaPaga: !!pagFixa(f, r.mes) })); row.appendChild(b); });
+      r.lista.forEach(f => { const b = document.createElement("button"); b.type = "button"; b.className = "btn sm ghost"; b.textContent = `${f.descricao}${f.parcela ? ` ${f.parcela}` : ""} (${brl2(f.valor)})`; b.addEventListener("click", () => mostrarFixa({ f, mes: r.mes, valor: r.valor, data: r.data, jaPaga: !!f.lanc })); row.appendChild(b); });
       const novo = document.createElement("button"); novo.type = "button"; novo.className = "btn sm ghost"; novo.textContent = "Nenhuma: é um gasto diferente";
       novo.addEventListener("click", () => outroGasto()); row.appendChild(novo); out.appendChild(row);
       return;
@@ -1170,17 +1319,18 @@ function bindAssist() {
   }
   function mostrarFixa(r) {
     const f = r.f, desp = f.tipo === "despesa";
-    if (r.jaPaga) return dizer(`A conta fixa "${f.descricao}" já está marcada como ${desp ? "paga" : "recebida"} em ${rotuloMes(r.mes)}. Nada foi lançado, para não contar duas vezes.`, "");
+    const rotulo = f.kind === "plan" ? `Planejado "${f.descricao}${f.parcela ? ` ${f.parcela}` : ""}"` : `Conta fixa "${f.descricao}"`;
+    if (r.jaPaga) return dizer(`${rotulo} já está marcado como ${desp ? "pago" : "recebido"} em ${rotuloMes(r.mes)}. Nada foi lançado, para não contar duas vezes.`, "");
     const valor = r.valor || Number(f.valor) || 0;
-    dizer(`Conta fixa "${f.descricao}" (${f.pessoa}): vou marcar como ${desp ? "paga" : "recebida"} em ${rotuloMes(r.mes)}, valor ${brl2(valor)}${valor !== Number(f.valor) ? ` (o cadastro diz ${brl2(f.valor)})` : ""}.`, "");
+    dizer(`${rotulo} (${f.pessoa}): vou marcar como ${desp ? "pago" : "recebido"} em ${rotuloMes(r.mes)}, valor ${brl2(valor)}${valor !== Number(f.valor) ? ` (o cadastro diz ${brl2(f.valor)})` : ""}.`, "");
     const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "8px";
-    const ok = document.createElement("button"); ok.type = "button"; ok.className = "btn sm"; ok.textContent = desp ? "Marcar como paga" : "Marcar como recebida";
+    const ok = document.createElement("button"); ok.type = "button"; ok.className = "btn sm"; ok.textContent = desp ? "Marcar como pago" : "Marcar como recebido";
     const novo = document.createElement("button"); novo.type = "button"; novo.className = "btn sm ghost"; novo.textContent = "Não, é um gasto diferente";
     const no = document.createElement("button"); no.type = "button"; no.className = "btn sm ghost"; no.textContent = "Cancelar";
     row.append(ok, novo, no); out.appendChild(row);
     no.addEventListener("click", () => { out.innerHTML = ""; });
     novo.addEventListener("click", () => outroGasto());
-    ok.addEventListener("click", async () => { ok.disabled = true; try { await addLanc({ fixaId: f.id, mes: r.mes, pessoa: f.pessoa, tipo: f.tipo, categoria: f.categoria, descricao: f.descricao, valor, data: r.data, forma: f.forma || "Pix / débito", criadoEm: hoje(), origem: "assistente" }); toast(desp ? "Conta marcada como paga." : "Marcada como recebida."); $("#aTxt").value = ""; out.innerHTML = ""; } catch (e) { ok.disabled = false; toast("Não foi possível salvar."); } });
+    ok.addEventListener("click", async () => { ok.disabled = true; try { await pagarItem(f, r.mes, valor); toast(desp ? "Marcado como pago." : "Marcado como recebido."); $("#aTxt").value = ""; out.innerHTML = ""; } catch (e) { ok.disabled = false; toast("Não foi possível salvar."); } });
   }
   function mostrarLanc(v) {
     const p = dizer(`Vou lançar: ${v.tipo === "receita" ? "entrada" : "saída"} de ${brl2(v.valor)} · ${v.categoria} · ${v.forma} · ${v.pessoa} · ${v.data.split("-").reverse().join("/")}.`, "");
@@ -1207,7 +1357,7 @@ function viewBackup() {
 }
 function bindBackup() { const b = $("#bkp"); if (b) b.addEventListener("click", baixarBackup); }
 async function baixarBackup() {
-  const dados = { geradoEm: new Date().toISOString(), versao: VERSAO, tarefas: S.tarefas, caixa: S.caixa, plano: S.plano, financas: { config: S.finCfg, fixas: S.finFixas, lancamentos: S.finLanc, saldos: S.finSaldos } };
+  const dados = { geradoEm: new Date().toISOString(), versao: VERSAO, tarefas: S.tarefas, caixa: S.caixa, plano: S.plano, financas: { config: S.finCfg, fixas: S.finFixas, planejados: S.finPlan, lancamentos: S.finLanc, saldos: S.finSaldos } };
   const blob = new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `backup-projeto-rural-${hoje()}.json`;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
@@ -1224,6 +1374,7 @@ function iniciarDados() {
   unsubs.push(DB.sub("fin_fixas", l => { S.finFixas = l; if (S.tab !== "plano") render(); }));
   unsubs.push(DB.sub("fin_lanc", l => { S.finLanc = l; if (S.tab !== "plano") render(); }));
   unsubs.push(DB.sub("fin_saldos", l => { S.finSaldos = l; if (S.tab !== "plano") render(); }));
+  unsubs.push(DB.sub("fin_plan", l => { S.finPlan = l; if (S.tab !== "plano") render(); }));
   unsubs.push(DB.sub("config", l => {
     const sis = l.find(x => x.id === "sistema"); S.sis = sis || {};
     const fc = l.find(x => x.id === "financas");
