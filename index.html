@@ -176,7 +176,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "1057930729110",
   appId: "1:1057930729110:web:dca69c4c0ebd2230d4d4b7"
 };
-const VERSAO = "v3-2026-11-05";
+const VERSAO = "v4-2026-11-05";
 
 /* ===================== utilidades ===================== */
 const DEMO = !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === "COLE_AQUI" || typeof firebase === "undefined";
@@ -1056,7 +1056,26 @@ function pessoaPadrao() {
   if (S.tab === "financas" && PESSOAS_FIN.includes(S.finAba)) return S.finAba;
   return norm(S.user?.email || "").startsWith("mmendex") ? "Marina" : "Marco";
 }
-function interpretar(txt) {
+const PALAVRAS_VAZIAS = new Set(["do", "da", "de", "dos", "e", "o", "a", "os", "as", "no", "na", "com", "para", "pra", "inclui", "conta", "contas", "paguei", "paga", "pago", "pagar", "pagamento", "quitei", "mes", "recebi", "recebido", "ontem", "hoje", "pix", "debito", "dinheiro", "boleto", "cartao", "mae", "credito"]);
+const NOMES = new Set(["maria", "luiz", "antonio", "marco", "marina", "pantaleao", "delma"]);
+const tokens = s => norm(s).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !/^\d+$/.test(w) && !PALAVRAS_VAZIAS.has(w));
+// Procura a conta fixa cujo nome aparece no texto (ex.: "pensão do luiz paga" -> "Pensão do Luiz Antônio").
+// Precisa de pelo menos uma palavra que não seja só nome de pessoa. Empate = pergunta qual é.
+function acharFixa(n, mes, tipo) {
+  const ts = new Set(tokens(n));
+  if (!ts.size) return null;
+  const cands = S.finFixas.filter(f => f.tipo === tipo && ativaNoMes(f, mes));
+  let top = 0, tops = [];
+  for (const f of cands) {
+    const hit = [...new Set(tokens(f.descricao))].filter(w => ts.has(w));
+    if (!hit.some(w => !NOMES.has(w))) continue;
+    if (hit.length > top) { top = hit.length; tops = [f]; } else if (hit.length === top) tops.push(f);
+  }
+  if (!tops.length) return null;
+  if (tops.length > 1) return { ambiguas: tops };
+  return { f: tops[0], jaPaga: !!pagFixa(tops[0], mes) };
+}
+function interpretar(txt, opts = {}) {
   let n = norm(txt).trim();
   if (!n) return null;
   if (/\?\s*$/.test(n) || /^(quanto|quantos|qual|quais|o que|oque|quando|tem |como|cade|resumo)/.test(n)) return { tipo: "pergunta", n };
@@ -1065,12 +1084,14 @@ function interpretar(txt) {
   const md = n.match(/(^|\s)(\d{1,2})\/(\d{1,2})(\/\d{2,4})?(\s|$)/);
   if (md) { const y = hoje().slice(0, 4); data = `${y}-${md[3].padStart(2, "0")}-${md[2].padStart(2, "0")}`; n = n.replace(md[0], " "); }
   const mv = n.match(/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/);
-  if (!mv) return { tipo: "erro", msg: "Não encontrei o valor. Escreva, por exemplo: mercado 85" };
-  let vs = mv[1];
-  vs = vs.includes(",") ? vs.replace(/\./g, "").replace(",", ".") : (/^\d{1,3}(\.\d{3})+$/.test(vs) ? vs.replace(/\./g, "") : vs);
-  const valor = Number(vs);
-  if (!(valor > 0)) return { tipo: "erro", msg: "O valor precisa ser maior que zero." };
+  let valor = 0;
+  if (mv) { let vs = mv[1]; vs = vs.includes(",") ? vs.replace(/\./g, "").replace(",", ".") : (/^\d{1,3}(\.\d{3})+$/.test(vs) ? vs.replace(/\./g, "") : vs); valor = Number(vs); }
   const receita = /(^|\s)(recebi|ganhei|entrou|entrada|vendi|salario|pagamento recebido)(\s|$)/.test(n);
+  const fx = opts.semFixa ? null : acharFixa(n, data.slice(0, 7), receita ? "receita" : "despesa");
+  if (fx && fx.ambiguas) return { tipo: "ambigua", lista: fx.ambiguas, mes: data.slice(0, 7), valor, data };
+  if (fx) return { tipo: "fixa", f: fx.f, mes: data.slice(0, 7), valor, data, jaPaga: fx.jaPaga };
+  if (!mv) return { tipo: "erro", msg: "Não encontrei o valor nem uma conta fixa com esse nome. Escreva, por exemplo: mercado 85" };
+  if (!(valor > 0)) return { tipo: "erro", msg: "O valor precisa ser maior que zero." };
   let forma = "Pix / débito";
   if (/cartao (da )?mae|(^|\s)mae(\s|$)/.test(n)) forma = "Cartão da mãe";
   else if (/(^|\s)(dinheiro|especie)(\s|$)/.test(n)) forma = "Dinheiro";
@@ -1132,7 +1153,36 @@ function bindAssist() {
       const resp = responder(r.n);
       return dizer(resp || "Ainda não sei responder isso. Tente: quanto gastei com mercado? · o que falta pagar? · quanto sobra este mês? · cartão da mãe? Para conselhos e análises, use o botão Copiar resumo para o Claude, em Finanças → Conciliação.", resp ? "" : "hint");
     }
-    const v = r.v;
+    if (r.tipo === "ambigua") {
+      dizer(`Encontrei ${r.lista.length} contas fixas parecidas. Qual delas?`, "");
+      const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "8px";
+      r.lista.forEach(f => { const b = document.createElement("button"); b.type = "button"; b.className = "btn sm ghost"; b.textContent = `${f.descricao} (${brl2(f.valor)})`; b.addEventListener("click", () => mostrarFixa({ f, mes: r.mes, valor: r.valor, data: r.data, jaPaga: !!pagFixa(f, r.mes) })); row.appendChild(b); });
+      const novo = document.createElement("button"); novo.type = "button"; novo.className = "btn sm ghost"; novo.textContent = "Nenhuma: é um gasto diferente";
+      novo.addEventListener("click", () => outroGasto()); row.appendChild(novo); out.appendChild(row);
+      return;
+    }
+    if (r.tipo === "fixa") return mostrarFixa(r);
+    mostrarLanc(r.v);
+  });
+  function outroGasto() {
+    const r2 = interpretar($("#aTxt").value, { semFixa: true }); out.innerHTML = "";
+    if (r2 && r2.tipo === "lanc") mostrarLanc(r2.v); else dizer(r2 && r2.msg ? r2.msg : "Escreva também o valor, por exemplo: presente 50");
+  }
+  function mostrarFixa(r) {
+    const f = r.f, desp = f.tipo === "despesa";
+    if (r.jaPaga) return dizer(`A conta fixa "${f.descricao}" já está marcada como ${desp ? "paga" : "recebida"} em ${rotuloMes(r.mes)}. Nada foi lançado, para não contar duas vezes.`, "");
+    const valor = r.valor || Number(f.valor) || 0;
+    dizer(`Conta fixa "${f.descricao}" (${f.pessoa}): vou marcar como ${desp ? "paga" : "recebida"} em ${rotuloMes(r.mes)}, valor ${brl2(valor)}${valor !== Number(f.valor) ? ` (o cadastro diz ${brl2(f.valor)})` : ""}.`, "");
+    const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "8px";
+    const ok = document.createElement("button"); ok.type = "button"; ok.className = "btn sm"; ok.textContent = desp ? "Marcar como paga" : "Marcar como recebida";
+    const novo = document.createElement("button"); novo.type = "button"; novo.className = "btn sm ghost"; novo.textContent = "Não, é um gasto diferente";
+    const no = document.createElement("button"); no.type = "button"; no.className = "btn sm ghost"; no.textContent = "Cancelar";
+    row.append(ok, novo, no); out.appendChild(row);
+    no.addEventListener("click", () => { out.innerHTML = ""; });
+    novo.addEventListener("click", () => outroGasto());
+    ok.addEventListener("click", async () => { ok.disabled = true; try { await addLanc({ fixaId: f.id, mes: r.mes, pessoa: f.pessoa, tipo: f.tipo, categoria: f.categoria, descricao: f.descricao, valor, data: r.data, forma: f.forma || "Pix / débito", criadoEm: hoje(), origem: "assistente" }); toast(desp ? "Conta marcada como paga." : "Marcada como recebida."); $("#aTxt").value = ""; out.innerHTML = ""; } catch (e) { ok.disabled = false; toast("Não foi possível salvar."); } });
+  }
+  function mostrarLanc(v) {
     const p = dizer(`Vou lançar: ${v.tipo === "receita" ? "entrada" : "saída"} de ${brl2(v.valor)} · ${v.categoria} · ${v.forma} · ${v.pessoa} · ${v.data.split("-").reverse().join("/")}.`, "");
     const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "8px";
     const ok = document.createElement("button"); ok.type = "button"; ok.className = "btn sm"; ok.textContent = "Confirmar";
@@ -1145,7 +1195,7 @@ function bindAssist() {
     sel.addEventListener("change", () => { v.categoria = sel.value; p.textContent = `Vou lançar: ${v.tipo === "receita" ? "entrada" : "saída"} de ${brl2(v.valor)} · ${v.categoria} · ${v.forma} · ${v.pessoa} · ${v.data.split("-").reverse().join("/")}.`; });
     no.addEventListener("click", () => { out.innerHTML = ""; });
     ok.addEventListener("click", async () => { ok.disabled = true; try { await addLanc(v); toast("Lançado."); $("#aTxt").value = ""; out.innerHTML = ""; } catch (err) { ok.disabled = false; toast("Não foi possível lançar."); } });
-  });
+  }
 }
 
 /* ===================== backup ===================== */
