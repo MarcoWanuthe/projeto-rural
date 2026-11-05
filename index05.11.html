@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Painel Projeto Rural</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: caderno de campo — barra superior com abas, conteúdo em largura confortável, quadro kanban com rolagem lateral */
+:root{
+  --bg:#F2F4EE; --surface:#FBFCF8; --sunk:#E8ECE2; --line:#D6DCCD; --fg:#1E2820; --muted:#5D6A5E;
+  --accent:#36633A; --accent-soft:#E1EBDC; --ochre:#A97A1F; --ochre-soft:#F3E7C9;
+  --good:#2F7A3B; --warn:#B07A12; --bad:#A63A24; --bad-soft:#F6E0DA;
+  --f-display:"Familjen Grotesk",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141A15; --surface:#1B231C; --sunk:#111611; --line:#2F3A30; --fg:#E4EADF; --muted:#9AA799;
+  --accent:#8CC48A; --accent-soft:#233325; --ochre:#E0B657; --ochre-soft:#3A3120;
+  --good:#7CCB86; --warn:#E3B04F; --bad:#F08B70; --bad-soft:#3A221C; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);padding-bottom:env(safe-area-inset-bottom,0px)}
+button,input,select,textarea{font:inherit;color:inherit}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+.top .wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:10px}
+.brand{font:700 1.05rem var(--f-display);display:flex;align-items:center;gap:8px}
+.brand i{width:10px;height:10px;border-radius:50%;background:var(--ochre);display:inline-block}
+nav.tabs{display:flex;gap:4px;flex:1 1 auto;overflow-x:auto}
+nav.tabs button{background:none;border:0;border-radius:6px;padding:7px 12px;font:600 .92rem var(--f-display);color:var(--muted);cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.who{font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+.demo-flag{font:500 .72rem var(--f-mono);background:var(--ochre-soft);color:var(--ochre);padding:3px 8px;border-radius:4px}
+main{padding-block:22px 60px}
+h1{font:700 1.6rem/1.2 var(--f-display);margin:0 0 4px;letter-spacing:-.01em;text-wrap:balance}
+h2{font:700 1.15rem/1.25 var(--f-display);margin:0 0 10px;text-wrap:balance}
+h3{font:600 1rem var(--f-display);margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 18px;max-width:70ch}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.stat .k{font:500 .75rem var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat .v{font:700 1.5rem var(--f-display);margin-top:4px;font-variant-numeric:tabular-nums}
+.stat .s{font-size:.85rem;color:var(--muted)}
+.neg{color:var(--bad)} .pos{color:var(--good)}
+.alerts{display:grid;gap:8px}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:8px;background:var(--sunk);font-size:.92rem}
+.alert b.dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px;margin-top:7px;background:var(--warn)}
+.alert.bad b.dot{background:var(--bad)} .alert.ok b.dot{background:var(--good)}
+.btn{background:var(--accent);color:var(--surface);border:0;border-radius:7px;padding:8px 14px;font:600 .92rem var(--f-display);cursor:pointer}
+.btn.ghost{background:none;color:var(--accent);border:1px solid var(--line)}
+.btn.danger{background:none;color:var(--bad);border:1px solid var(--line)}
+.btn:focus-visible,nav.tabs button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+input[type=text],input[type=number],input[type=date],input[type=month],input[type=email],input[type=password],select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%}
+textarea{min-height:70px;resize:vertical}
+label.f{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+label.f span{font-weight:700;color:var(--fg)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+/* Plano */
+.fase{display:grid;grid-template-columns:minmax(150px,220px) 1fr;gap:14px;padding:14px 0;border-top:1px solid var(--line)}
+.fase:first-of-type{border-top:0}
+.fase .n{font:600 1rem var(--f-display)} .fase .d{font-size:.85rem;color:var(--muted)}
+.fase.atual{background:var(--accent-soft);border-radius:8px;padding:14px;border:0}
+.pill{display:inline-block;font:600 .72rem var(--f-display);padding:2px 8px;border-radius:99px;background:var(--sunk);color:var(--muted)}
+.pill.on{background:var(--accent);color:var(--surface)}
+.gate{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:4px}
+.gate label{display:flex;gap:8px;align-items:flex-start;font-size:.92rem;cursor:pointer}
+.gate input{margin-top:4px}
+@media (max-width:640px){.fase{grid-template-columns:1fr}}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.85rem;font-variant-numeric:tabular-nums}
+th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font:600 .78rem var(--f-display);color:var(--muted);background:var(--sunk);position:sticky;top:0}
+td:first-child,th:first-child{text-align:left}
+tr.hl td{background:var(--ochre-soft)}
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:.82rem;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+/* Quadro */
+.board{display:grid;grid-template-columns:repeat(4,minmax(250px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px}
+.col{background:var(--sunk);border-radius:10px;padding:10px;min-height:200px;display:flex;flex-direction:column;gap:8px}
+.col.drop{outline:2px dashed var(--accent);outline-offset:-4px}
+.col h3{display:flex;justify-content:space-between;font-size:.92rem;margin:2px 4px 4px}
+.col h3 small{font:500 .78rem var(--f-mono);color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;cursor:grab;display:grid;gap:6px}
+.card .t{font-weight:700;line-height:1.3}
+.card .meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:.78rem}
+.tag{padding:1px 7px;border-radius:4px;background:var(--sunk);color:var(--muted);font-weight:700}
+.tag.Operacional{background:#E3ECD9;color:#3D5B22}.tag.Comercial{background:#F3E7C9;color:#7A5712}.tag.Regularização{background:#E2E5F1;color:#3C4775}.tag.Financeiro{background:#F0DFDA;color:#7E3A26}.tag.Gestão{background:#E6E6E0;color:#4B4B40}
+@media (prefers-color-scheme:dark){.tag.Operacional{background:#27351F;color:#B6D69A}.tag.Comercial{background:#3A3120;color:#E8C77E}.tag.Regularização{background:#252A3E;color:#AEB8E6}.tag.Financeiro{background:#3A241E;color:#F0A88F}.tag.Gestão{background:#2C2C27;color:#C9C9BC}}
+.due{color:var(--muted)} .due.late{color:var(--bad);font-weight:700}
+.resp{margin-left:auto;font-weight:700;color:var(--accent)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.filters select{width:auto}
+/* Caixa */
+.ent{color:var(--good)} .sai{color:var(--bad)}
+td .x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:1rem}
+/* Modal */
+dialog{border:0;border-radius:12px;padding:0;max-width:560px;width:calc(100% - 32px);background:var(--surface);color:var(--fg)}
+dialog::backdrop{background:rgba(10,15,10,.45)}
+dialog form{padding:18px;display:grid;gap:12px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.9rem;z-index:50}
+/* Login */
+.login{max-width:380px;margin:12vh auto;display:grid;gap:12px}
+.empty{padding:24px;text-align:center;color:var(--muted)}
+.hint{font-size:.82rem;color:var(--muted)}
+/* Finanças */
+.seg{display:inline-flex;background:var(--sunk);border-radius:8px;padding:3px;gap:2px}
+.seg button{border:0;background:none;padding:7px 14px;border-radius:6px;font:600 .9rem var(--f-display);color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.bar{height:8px;background:var(--sunk);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar i.warn{background:var(--warn)} .bar i.bad{background:var(--bad)}
+.catrow{display:grid;grid-template-columns:minmax(110px,1.1fr) 2fr minmax(90px,auto);gap:10px;align-items:center;font-size:.88rem;padding:5px 0}
+.catrow .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.health{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.hcard{border-radius:10px;padding:14px;border:1px solid var(--line);background:var(--surface);display:grid;gap:4px}
+.hcard .k{font:500 .75rem var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.hcard .v{font:700 1.35rem var(--f-display);font-variant-numeric:tabular-nums}
+.hcard .lvl{font:600 .75rem var(--f-display);text-transform:uppercase;letter-spacing:.05em}
+.lvl.good{color:var(--good)} .lvl.warn{color:var(--warn)} .lvl.bad{color:var(--bad)}
+.hcard.bad{border-color:var(--bad)} .hcard.warn{border-color:var(--warn)}
+.paid{color:var(--good);font-weight:700}
+.btn.sm{padding:4px 10px;font-size:.82rem}
+tr.late td{background:var(--bad-soft)}
+.linkbtn{background:none;border:0;padding:0;color:var(--fg);font:inherit;text-align:left;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px}
+.pill.warnp{background:var(--ochre-soft);color:var(--ochre)}
+@media (max-width:640px){.hide-sm{display:none}}
+.note{font-size:.85rem;color:var(--muted);border-left:3px solid var(--ochre);padding:4px 0 4px 10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><i></i>Projeto Rural</div>
+    <nav class="tabs" id="tabs" aria-label="Seções">
+      <button data-tab="painel">Painel</button>
+      <button data-tab="plano">Plano</button>
+      <button data-tab="quadro">Quadro</button>
+      <button data-tab="caixa">Caixa</button>
+      <button data-tab="financas">Finanças</button>
+    </nav>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<main class="wrap" id="app"></main>
+
+<dialog id="dlg"></dialog>
+
+<!-- Firebase (versão compat, a mesma família usada no MESO-LOG) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ===================================================================
+   1) CONFIGURAÇÃO — cole aqui o objeto do seu projeto Firebase.
+   Enquanto apiKey for "COLE_AQUI", o painel roda em MODO DEMONSTRAÇÃO:
+   tudo fica salvo só neste navegador (localStorage).
+   =================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBPmAFnLUP-Q_izzByKYfjZ2Xy5UQWeTek",
+  authDomain: "projeto-rural-d850b.firebaseapp.com",
+  projectId: "projeto-rural-d850b",
+  storageBucket: "projeto-rural-d850b.firebasestorage.app",
+  messagingSenderId: "1057930729110",
+  appId: "1:1057930729110:web:dca69c4c0ebd2230d4d4b7"
+};
+const VERSAO = "v2-2026-11-05";
+
+/* ===================== utilidades ===================== */
+const DEMO = !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === "COLE_AQUI" || typeof firebase === "undefined";
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const brl = n => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const brl2 = n => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const num = (n, d = 0) => (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
+const hoje = () => new Date().toISOString().slice(0, 10);
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const rotuloMes = ym => { const [y, m] = ym.split("-").map(Number); return `${MESES[m - 1]}/${String(y).slice(2)}`; };
+const somaMes = (ym, k) => { let [y, m] = ym.split("-").map(Number); m += k; y += Math.floor((m - 1) / 12); m = ((m - 1) % 12 + 12) % 12 + 1; return `${y}-${String(m).padStart(2, "0")}`; };
+function toast(msg) { document.querySelectorAll(".toast").forEach(x => x.remove()); const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2600); }
+
+/* ===================== camada de dados ===================== */
+function criarDB() {
+  if (DEMO) {
+    const KEY = "projeto-rural-demo-v1";
+    let data; try { data = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { data = {}; }
+    const subs = {};
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {} };
+    const list = c => Object.entries(data[c] || {}).map(([id, v]) => ({ id, ...v }));
+    const emit = c => (subs[c] || []).forEach(fn => fn(list(c)));
+    return {
+      sub(c, fn) { (subs[c] = subs[c] || []).push(fn); fn(list(c)); return () => { subs[c] = subs[c].filter(f => f !== fn); }; },
+      async add(c, v) { const id = Math.random().toString(36).slice(2, 11); (data[c] = data[c] || {})[id] = v; save(); emit(c); return id; },
+      async set(c, id, v) { (data[c] = data[c] || {})[id] = v; save(); emit(c); },
+      async update(c, id, v) { data[c][id] = { ...data[c][id], ...v }; save(); emit(c); },
+      async remove(c, id) { delete (data[c] || {})[id]; save(); emit(c); },
+      async batchAdd(c, arr) { for (const v of arr) { const id = Math.random().toString(36).slice(2, 11); (data[c] = data[c] || {})[id] = v; } save(); emit(c); }
+    };
+  }
+  const fs = firebase.firestore();
+  return {
+    sub(c, fn) { return fs.collection(c).limit(2000).onSnapshot(s => fn(s.docs.map(d => ({ id: d.id, ...d.data() }))), e => toast("Sem acesso aos dados: " + e.code)); },
+    async add(c, v) { return (await fs.collection(c).add(v)).id; },
+    async set(c, id, v) { await fs.collection(c).doc(id).set(v); },
+    async update(c, id, v) { await fs.collection(c).doc(id).update(v); },
+    async remove(c, id) { await fs.collection(c).doc(id).delete(); },
+    async batchAdd(c, arr) { const b = fs.batch(); arr.forEach(v => b.set(fs.collection(c).doc(), v)); await b.commit(); }
+  };
+}
+
+/* ===================== conteúdo inicial ===================== */
+const PLANO_PADRAO = {
+  faseAtual: "f0",
+  fases: [
+    { id: "f0", nome: "Fase 0 · Base", datas: "nov/2026 – jan/2027", resumo: "Orçamento organizado, reserva separada, acordo escrito com os sogros, consultas à Agrodefesa e à Emater, pesquisa de preço.",
+      portao: [{ t: "Orçamento do casal positivo por 2 meses seguidos", ok: false }, { t: "Reserva de R$ 5 mil separada em conta própria", ok: false }, { t: "Acordo de sociedade escrito com os sogros", ok: false }, { t: "Preço de venda do ovo validado em Brasília", ok: false }, { t: "Resposta da Agrodefesa sobre venda direta de ovos", ok: false }] },
+    { id: "f1", nome: "Fase 1 · Piloto", datas: "fev – set/2027", resumo: "100 aves, galinheiro simples, esterco para a compostagem da horta, registro diário de produção e vendas.",
+      portao: [{ t: "Postura média ≥ 65% por 3 meses", ok: false }, { t: "≥ 95% da produção vendida", ok: false }, { t: "Margem ≥ R$ 14 por ave/mês", ok: false }, { t: "≥ 25 clientes com compra recorrente", ok: false }] },
+    { id: "f2", nome: "Fase 2 · Validar", datas: "out/2027 – jun/2028", resumo: "Ampliar para ≈ 300 aves, hortaliças na mesma entrega, CAF, OCS de orgânicos e inspeção para vender a mercados do DF.",
+      portao: [{ t: "Lucro rural ≥ 50% do custo de vida da casa por 6 meses", ok: false }, { t: "Reserva de 3 meses de custo de vida", ok: false }, { t: "Inspeção sanitária resolvida para mercados e restaurantes", ok: false }] },
+    { id: "f3", nome: "Fase 3 · Escala", datas: "jul/2028 – 2029", resumo: "Mais aves, agrofloresta, crédito PRONAF no nome da Marina ou da unidade familiar, mudança para a propriedade, redução negociada do contrato PJ.",
+      portao: [{ t: "Lucro rural ≥ R$ 8 mil/mês por 6 meses", ok: false }, { t: "Reserva de 6 meses de custo de vida", ok: false }, { t: "Pelo menos 2 atividades gerando receita", ok: false }] },
+    { id: "f4", nome: "Fase 4 · Transição", datas: "a partir de 2029/2030", resumo: "Dedicação integral. Nova atividade só entra depois de bater a meta da anterior.", portao: [] }
+  ],
+  premissas: {
+    inicio: "2026-11", rendaCasal: 6798, despesasCasa: 5260, reservaInicial: 5000, reservaMeses: 3, capitalProjeto: 5000,
+    pctReserva: 30, postura: 65, preco: 15, racaoKg: 1.8, consumoG: 115, mortalidade: 6, sanidadeAve: 1, embalagemDz: 0.6,
+    transporteMes: 250, pintainha: 8, recriaKg: 7, mesesRecria: 5, instalacaoAve: 30, pctSogros: 30, metaRenda: 8000
+  },
+  lotes: [{ mes: "2027-02", qtd: 100 }, { mes: "2027-11", qtd: 200 }],
+  anos: [{ ano: 1, aves: 100, outras: 0 }, { ano: 2, aves: 300, outras: 500 }, { ano: 3, aves: 450, outras: 1500 }, { ano: 4, aves: 700, outras: 3000 }, { ano: 5, aves: 1000, outras: 4500 }]
+};
+
+const TAREFAS_INICIAIS = [
+  ["Separar R$ 5 mil de reserva em conta própria", "Marina", "Financeiro", "2026-11-10", "Conta separada, de preferência no nome da Marina. Não usar para o projeto."],
+  ["Publicar o painel e criar o acesso da Marina", "Marco", "Gestão", "2026-11-08", "Seguir o LEIA-ME: Firebase, regras, GitHub Pages."],
+  ["Ligar para a Agrodefesa", "Marco", "Regularização", "2026-11-13", "Perguntas: venda direta de ovos a pessoa física exige registro? A venda de ovos com SIE para o DF segue autorizada? Telefone (62) 3201-8578 · geinsp.agrodefesa@goias.gov.br"],
+  ["Pesquisa de preço do ovo caipira em 5 pontos de Brasília", "Marina", "Comercial", "2026-11-18", "Feira orgânica, hortifrúti, empório, supermercado e venda por WhatsApp. Anotar preço da dúzia, marca e se é orgânico."],
+  ["Visitar a Emater-GO", "Marco", "Regularização", "2026-11-21", "CAF, assistência técnica e projeto do galinheiro."],
+  ["Conversar com a cooperativa do assentamento", "Pantaleão", "Regularização", "2026-11-22", "Existe OCS de orgânicos? Vendem para PAA ou PNAE? Como entrar?"],
+  ["Conversa com os sogros sobre a sociedade", "Casal", "Gestão", "2026-11-22", "Levar a proposta: quem faz o quê, como dividir custos e resultado, uso da área do galinheiro."],
+  ["Lista de 30 possíveis clientes", "Marina", "Comercial", "2026-11-25", "Família, colegas, clínicas, vizinhos de Brasília. Nome, contato e quantas dúzias por semana."],
+  ["Verificar cláusulas no título da terra", "Marco", "Regularização", "2026-11-30", "Olhar na matrícula se há cláusula de inalienabilidade e até quando vale."],
+  ["Rascunho do acordo de sociedade", "Marco", "Gestão", "2026-11-30", "Depois da conversa com os sogros. Registrar divisão de trabalho, custos e resultado."],
+  ["Cortar R$ 400 de gastos aleatórios", "Casal", "Financeiro", "2026-11-30", "Acompanhar no fim do mês se o corte aconteceu."],
+  ["Decidir o que fazer com o consórcio Porto Seguro", "Marco", "Financeiro", "2026-11-30", "Entender o bem, o prazo e se faz sentido manter, transferir ou vender a cota."],
+  ["Definir o local do galinheiro e medir a água na seca", "Marco", "Operacional", "2026-12-13", "Perto de energia e água, longe de alagamento, com área para piquete."],
+  ["Orçar galinheiro para 100 aves", "Marco", "Operacional", "2026-12-20", "Materiais, tela, comedouros, bebedouros, ninhos (1 para cada 5 aves)."]
+].map(([titulo, responsavel, area, prazo, descricao], i) => ({ titulo, responsavel, area, prazo, descricao, status: "afazer", fase: "f0", ordem: i, criadoEm: hoje() }));
+
+const COLUNAS = [["afazer", "A fazer"], ["fazendo", "Fazendo"], ["aguardando", "Aguardando terceiros"], ["feito", "Feito"]];
+const AREAS = ["Operacional", "Comercial", "Regularização", "Financeiro", "Gestão"];
+const PESSOAS = ["Marco", "Marina", "Casal", "Pantaleão", "Delma"];
+const CATEGORIAS = { entrada: ["Venda de ovos", "Venda de hortaliças", "Venda de aves", "Aporte do casal", "Outras entradas"], saida: ["Ração", "Aves", "Instalações", "Equipamentos", "Sanidade", "Embalagem", "Transporte", "Repasse aos sogros", "Documentação", "Outras saídas"] };
+const ATIVIDADES = ["Avicultura", "Horta", "Geral"];
+
+/* ===================== projeção ===================== */
+function projetar(plano) {
+  const P = plano.premissas, out = [];
+  const [y0, m0] = P.inicio.split("-").map(Number);
+  const idx = s => { const [y, m] = s.split("-").map(Number); return (y - y0) * 12 + (m - m0); };
+  const lotes = (plano.lotes || []).filter(l => l.mes && l.qtd > 0).map(l => ({ ...l, i: idx(l.mes) }));
+  const metaReserva = P.despesasCasa * P.reservaMeses;
+  let caixa = P.capitalProjeto, reserva = P.reservaInicial;
+  for (let i = 0; i < 24; i++) {
+    let aves = 0, invest = 0, recria = 0;
+    for (const l of lotes) {
+      if (i === l.i) invest += l.qtd * (P.pintainha + P.instalacaoAve);
+      if (i >= l.i && i < l.i + P.mesesRecria) recria += l.qtd * P.recriaKg * P.racaoKg / P.mesesRecria;
+      if (i >= l.i + P.mesesRecria) aves += l.qtd * (1 - P.mortalidade / 100);
+    }
+    const dz = aves * 30 * (P.postura / 100) / 12;
+    const receita = dz * P.preco;
+    const custo = aves * (P.consumoG / 1000 * 30 * P.racaoKg + P.sanidadeAve) + dz * P.embalagemDz + (aves > 0 ? P.transporteMes : 0) + recria;
+    const resultado = receita - custo;
+    const sogros = resultado > 0 ? resultado * P.pctSogros / 100 : 0;
+    const liquido = resultado - sogros;
+    const sobra = P.rendaCasal - P.despesasCasa;
+    const paraReserva = sobra > 0 && reserva < metaReserva ? Math.min(sobra * P.pctReserva / 100, metaReserva - reserva) : 0;
+    const aporte = sobra - paraReserva;
+    reserva += paraReserva;
+    caixa += aporte + liquido - invest;
+    out.push({ mes: somaMes(P.inicio, i), aves, dz, receita, custo, resultado, sogros, liquido, invest, aporte, caixa, reserva });
+  }
+  return out;
+}
+function margemPorAve(P) {
+  const dzAve = 30 * (P.postura / 100) / 12;
+  return dzAve * P.preco - (P.consumoG / 1000 * 30 * P.racaoKg + P.sanidadeAve) - dzAve * P.embalagemDz;
+}
+function visao5anos(plano) {
+  const P = plano.premissas, m = margemPorAve(P);
+  return (plano.anos || []).map(a => {
+    const vivos = a.aves * (1 - P.mortalidade / 100);
+    const bruto = vivos * m - (a.aves > 0 ? P.transporteMes * Math.max(1, Math.ceil(a.aves / 400)) : 0) + Number(a.outras || 0);
+    const casal = bruto > 0 ? bruto * (1 - P.pctSogros / 100) : bruto;
+    return { ...a, porMes: casal, porAno: casal * 12, atinge: casal >= P.metaRenda };
+  });
+}
+
+/* ===================== estado e roteamento ===================== */
+const S = { tab: "painel", tarefas: [], caixa: [], plano: null, user: null, filtroResp: "", filtroArea: "", mesCaixa: hoje().slice(0, 7),
+  finFixas: [], finLanc: [], finSaldos: [], finCfg: null, finAba: "Marco", finMes: hoje().slice(0, 7) };
+let DB, unsubs = [];
+
+function go(tab) {
+  S.tab = tab;
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false"));
+  try { location.hash = tab; } catch (e) {}
+  render();
+}
+document.getElementById("tabs").addEventListener("click", e => { const b = e.target.closest("button[data-tab]"); if (b) go(b.dataset.tab); });
+
+function render() {
+  const app = $("#app");
+  if (!DEMO && !S.user) { app.innerHTML = viewLogin(); bindLogin(); return; }
+  if (!S.plano) { app.innerHTML = `<div class="empty">Carregando…</div>`; return; }
+  app.innerHTML = ({ painel: viewPainel, plano: viewPlano, quadro: viewQuadro, caixa: viewCaixa, financas: viewFinancas }[S.tab] || viewPainel)();
+  ({ painel: bindPainel, plano: bindPlano, quadro: bindQuadro, caixa: bindCaixa, financas: bindFinancas }[S.tab] || (() => {}))();
+}
+
+/* ===================== login ===================== */
+function viewLogin() {
+  return `<form class="login panel" id="fLogin">
+    <h1>Entrar</h1>
+    <p class="lead">Acesso restrito ao Marco e à Marina.</p>
+    <label class="f"><span>E-mail</span><input type="email" id="lEmail" required autocomplete="username"></label>
+    <label class="f"><span>Senha</span><input type="password" id="lSenha" required autocomplete="current-password"></label>
+    <button class="btn" type="submit">Entrar</button>
+    <button class="btn ghost" type="button" id="lReset">Esqueci a senha</button>
+  </form>`;
+}
+function bindLogin() {
+  $("#fLogin").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { await firebase.auth().signInWithEmailAndPassword($("#lEmail").value.trim(), $("#lSenha").value); }
+    catch (err) { toast("Não foi possível entrar. Confira e-mail e senha."); }
+  });
+  $("#lReset").addEventListener("click", async () => {
+    const em = $("#lEmail").value.trim(); if (!em) return toast("Digite o e-mail primeiro.");
+    try { await firebase.auth().sendPasswordResetEmail(em); toast("Enviamos um link para redefinir a senha."); } catch (e) { toast("Não foi possível enviar o link."); }
+  });
+}
+
+/* ===================== painel ===================== */
+function viewPainel() {
+  const p = S.plano, fase = p.fases.find(f => f.id === p.faseAtual) || p.fases[0];
+  const okG = fase.portao.filter(g => g.ok).length;
+  const t = S.tarefas, h = hoje();
+  const abertas = t.filter(x => x.status !== "feito");
+  const atrasadas = abertas.filter(x => x.prazo && x.prazo < h);
+  const semana = abertas.filter(x => x.prazo && x.prazo >= h && x.prazo <= new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10));
+  const aguardando = t.filter(x => x.status === "aguardando");
+  const mes = h.slice(0, 7);
+  const doMes = S.caixa.filter(c => (c.data || "").startsWith(mes));
+  const ent = doMes.filter(c => c.tipo === "entrada").reduce((a, c) => a + Number(c.valor || 0), 0);
+  const sai = doMes.filter(c => c.tipo === "saida").reduce((a, c) => a + Number(c.valor || 0), 0);
+  const saldo = S.caixa.reduce((a, c) => a + (c.tipo === "entrada" ? 1 : -1) * Number(c.valor || 0), 0);
+  const proj = projetar(p), P = p.premissas;
+  const pb = proj.findIndex(r => r.liquido >= P.metaRenda);
+  const minCaixa = Math.min(...proj.map(r => r.caixa));
+  const alertas = [];
+  atrasadas.slice(0, 5).forEach(x => alertas.push(["bad", `Atrasada: <b>${esc(x.titulo)}</b> (${esc(x.responsavel)}, prazo ${esc(x.prazo.split("-").reverse().join("/"))})`]));
+  if (minCaixa < 0) alertas.push(["bad", `Pela projeção, o caixa do projeto fica negativo em algum mês (mínimo ${brl(minCaixa)}). Revise lotes ou aportes no Plano.`]);
+  if (aguardando.length) alertas.push(["warn", `${aguardando.length} tarefa(s) aguardando terceiros. Vale cobrar.`]);
+  if (P.rendaCasal - P.despesasCasa <= 0) alertas.push(["bad", "O orçamento da casa está no negativo nas premissas do Plano."]);
+  const dH = Number(h.slice(8));
+  S.finFixas.filter(f => f.tipo === "despesa" && ativaNoMes(f, mes) && f.dia && !pagFixa(f, mes) && f.dia - dH <= 3)
+    .forEach(f => alertas.push([f.dia < dH ? "bad" : "warn", `${f.dia < dH ? "Conta atrasada" : "Conta vence logo"}: <b>${esc(f.descricao)}</b> (${esc(f.pessoa)}, dia ${f.dia}, ${brl2(f.valor)})`]));
+  if (S.finFixas.length) {
+    const rc = PESSOAS_FIN.map(p => resumoPessoa(p, mes)), sob = rc.reduce((a, r) => a + r.renda - r.desp, 0);
+    if (sob < 0) alertas.push(["bad", `As finanças da casa fecham ${rotuloMes(mes)} no negativo (${brl(sob)}). Veja a aba Finanças.`]);
+  }
+  if (!alertas.length) alertas.push(["ok", "Nada atrasado. Siga com as tarefas da semana."]);
+  return `
+  <h1>Painel</h1>
+  <p class="lead">${esc(fase.nome)} · ${esc(fase.datas)}. ${okG} de ${fase.portao.length} critérios do portão cumpridos.</p>
+  <div class="grid g4">
+    <div class="panel stat"><div class="k">Tarefas abertas</div><div class="v">${abertas.length}</div><div class="s">${semana.length} vencem nos próximos 7 dias</div></div>
+    <div class="panel stat"><div class="k">Atrasadas</div><div class="v ${atrasadas.length ? "neg" : ""}">${atrasadas.length}</div><div class="s">${aguardando.length} aguardando terceiros</div></div>
+    <div class="panel stat"><div class="k">Caixa do mês</div><div class="v ${ent - sai < 0 ? "neg" : ""}">${brl(ent - sai)}</div><div class="s">Entradas ${brl(ent)} · saídas ${brl(sai)}</div></div>
+    <div class="panel stat"><div class="k">Saldo do projeto</div><div class="v ${saldo < 0 ? "neg" : ""}">${brl(saldo)}</div><div class="s">Soma de todos os lançamentos</div></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="panel"><h2>Alertas</h2><div class="alerts">${alertas.map(([k, m]) => `<div class="alert ${k}"><b class="dot"></b><div>${m}</div></div>`).join("")}</div></div>
+    <div class="panel"><h2>Portão da fase atual</h2>
+      ${fase.portao.length ? `<ul class="gate">${fase.portao.map(g => `<li>${g.ok ? "✓" : "○"} ${esc(g.t)}</li>`).join("")}</ul>` : `<p class="hint">Última fase.</p>`}
+      <p class="hint" style="margin-top:12px">Meta de renda do casal: ${brl(P.metaRenda)}/mês. ${pb >= 0 ? `A projeção de 24 meses atinge a meta em ${rotuloMes(proj[pb].mes)}.` : `A projeção de 24 meses chega a ${brl(proj[23].liquido)}/mês em ${rotuloMes(proj[23].mes)}; a meta fica para depois (veja a visão de 5 anos no Plano).`}</p>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:14px"><div class="row"><h2 style="margin:0">Próximas tarefas</h2><span class="spacer"></span><button class="btn ghost" data-go="quadro">Abrir quadro</button></div>
+    ${abertas.length ? `<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Tarefa</th><th>Responsável</th><th>Área</th><th>Prazo</th></tr></thead><tbody>
+    ${abertas.slice().sort((a, b) => (a.prazo || "9") < (b.prazo || "9") ? -1 : 1).slice(0, 8).map(x => `<tr><td>${esc(x.titulo)}</td><td>${esc(x.responsavel)}</td><td>${esc(x.area)}</td><td class="${x.prazo && x.prazo < h ? "neg" : ""}">${x.prazo ? esc(x.prazo.split("-").reverse().join("/")) : "—"}</td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="empty">Nenhuma tarefa aberta. ${S.tarefas.length ? "" : `<br><button class="btn" id="seed1" style="margin-top:10px">Carregar tarefas da Fase 0</button>`}</div>`}
+  </div>`;
+}
+function bindPainel() {
+  document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => go(b.dataset.go)));
+  const s = $("#seed1"); if (s) s.addEventListener("click", seedTarefas);
+}
+async function seedTarefas() {
+  if (S.tarefas.length) return toast("O quadro já tem tarefas.");
+  await DB.batchAdd("tarefas", TAREFAS_INICIAIS); toast("Tarefas da Fase 0 carregadas.");
+}
+
+/* ===================== plano ===================== */
+const CAMPOS_PREMISSAS = [
+  ["Casa", [["rendaCasal", "Renda do casal (R$/mês)"], ["despesasCasa", "Despesas da casa (R$/mês)"], ["reservaInicial", "Reserva inicial (R$)"], ["reservaMeses", "Meta de reserva (meses)"], ["pctReserva", "% da sobra para a reserva até a meta"], ["metaRenda", "Meta de renda rural do casal (R$/mês)"]]],
+  ["Projeto", [["inicio", "Mês inicial", "month"], ["capitalProjeto", "Capital inicial do projeto (R$)"], ["pctSogros", "% do resultado para os sogros"], ["transporteMes", "Transporte (R$/mês)"], ["instalacaoAve", "Instalação por ave (R$)"]]],
+  ["Avicultura", [["postura", "Postura média (%)"], ["preco", "Preço da dúzia (R$)"], ["racaoKg", "Ração (R$/kg)"], ["consumoG", "Consumo (g/ave/dia)"], ["mortalidade", "Mortalidade no ciclo (%)"], ["sanidadeAve", "Sanidade (R$/ave/mês)"], ["embalagemDz", "Embalagem (R$/dúzia)"], ["pintainha", "Pintainha (R$)"], ["recriaKg", "Ração na recria (kg/ave)"], ["mesesRecria", "Meses até a postura"]]]
+];
+function viewPlano() {
+  const p = S.plano, P = p.premissas, proj = projetar(p), anos = visao5anos(p);
+  const m = margemPorAve(P);
+  return `
+  <h1>Plano</h1>
+  <p class="lead">Fases, portões, premissas e projeções. Toda premissa é hipótese: troque pelos números reais assim que existirem, e as projeções se recalculam.</p>
+  <div class="panel"><h2>Fases e portões</h2>
+    ${p.fases.map(f => `<div class="fase ${f.id === p.faseAtual ? "atual" : ""}">
+      <div><div class="n">${esc(f.nome)}</div><div class="d">${esc(f.datas)}</div>
+        <div style="margin-top:6px">${f.id === p.faseAtual ? `<span class="pill on">Fase atual</span>` : `<button class="btn ghost" data-fase="${f.id}" style="padding:3px 10px;font-size:.8rem">Tornar atual</button>`}</div></div>
+      <div><div>${esc(f.resumo)}</div>
+        ${f.portao.length ? `<ul class="gate">${f.portao.map((g, gi) => `<li><label><input type="checkbox" data-gate="${f.id}:${gi}" ${g.ok ? "checked" : ""}> ${esc(g.t)}</label></li>`).join("")}</ul>` : ""}</div>
+    </div>`).join("")}
+  </div>
+
+  <div class="panel" style="margin-top:14px"><h2>Premissas</h2>
+    <form id="fPrem">
+      ${CAMPOS_PREMISSAS.map(([g, cs]) => `<h3 style="margin-top:12px">${g}</h3><div class="form-grid">${cs.map(([k, l, t]) => `<label class="f"><span>${l}</span><input id="pr_${k}" type="${t || "number"}" step="any" value="${esc(P[k])}"></label>`).join("")}</div>`).join("")}
+      <h3 style="margin-top:14px">Lotes de aves (projeção de 24 meses)</h3>
+      <div id="lotes" class="grid" style="gap:8px">${(p.lotes || []).map((l, i) => `<div class="row"><input type="month" id="lm_${i}" value="${esc(l.mes)}" style="max-width:180px"><input type="number" id="lq_${i}" value="${esc(l.qtd)}" style="max-width:120px"><span class="hint">aves</span></div>`).join("")}</div>
+      <div class="row" style="margin-top:8px"><button type="button" class="btn ghost" id="addLote">Adicionar lote</button></div>
+      <h3 style="margin-top:14px">Metas de 5 anos</h3>
+      <div class="tbl-wrap"><table><thead><tr><th>Ano</th><th>Aves em produção</th><th>Outras atividades (lucro R$/mês)</th></tr></thead><tbody>
+        ${(p.anos || []).map((a, i) => `<tr><td>Ano ${a.ano}</td><td><input type="number" id="aa_${i}" value="${esc(a.aves)}" style="max-width:120px"></td><td><input type="number" id="ao_${i}" value="${esc(a.outras)}" style="max-width:140px"></td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="row" style="margin-top:14px"><button class="btn" type="submit">Salvar premissas</button><button class="btn ghost" type="button" id="resetPrem">Voltar aos valores do diagnóstico</button></div>
+    </form>
+  </div>
+
+  <div class="panel" style="margin-top:14px"><h2>Projeção de 24 meses</h2>
+    <p class="hint">Margem estimada: ${brl2(m)} por ave em produção por mês, antes do transporte e da parte dos sogros. Primeiros ovos ${P.mesesRecria} meses depois da compra de cada lote.</p>
+    <div class="chart">${graficoCaixa(proj)}</div>
+    <div class="legend"><span><i style="background:var(--accent)"></i>Caixa do projeto (acumulado)</span><span><i style="background:var(--ochre)"></i>Reserva da casa</span><span><i style="background:var(--muted)"></i>Renda rural do casal no mês</span></div>
+    <div class="tbl-wrap" style="margin-top:12px;max-height:520px"><table><thead><tr><th>Mês</th><th>Aves</th><th>Dúzias</th><th>Receita</th><th>Custos</th><th>Resultado</th><th>Sogros</th><th>Renda do casal</th><th>Investimento</th><th>Aporte da casa</th><th>Caixa do projeto</th><th>Reserva</th></tr></thead><tbody>
+    ${proj.map(r => `<tr class="${r.mes === hoje().slice(0, 7) ? "hl" : ""}"><td>${rotuloMes(r.mes)}</td><td>${num(r.aves)}</td><td>${num(r.dz)}</td><td>${brl(r.receita)}</td><td>${brl(r.custo)}</td><td class="${r.resultado < 0 ? "neg" : ""}">${brl(r.resultado)}</td><td>${brl(r.sogros)}</td><td class="${r.liquido < 0 ? "neg" : ""}">${brl(r.liquido)}</td><td>${brl(r.invest)}</td><td>${brl(r.aporte)}</td><td class="${r.caixa < 0 ? "neg" : ""}">${brl(r.caixa)}</td><td>${brl(r.reserva)}</td></tr>`).join("")}
+    </tbody></table></div>
+  </div>
+
+  <div class="panel" style="margin-top:14px"><h2>Visão de 5 anos</h2>
+    <p class="hint">Média mensal em ano estabilizado, já descontada a parte dos sogros. "Outras atividades" são metas a validar, não previsões.</p>
+    <div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>Ano</th><th>Aves</th><th>Outras atividades</th><th>Renda do casal / mês</th><th>Renda do casal / ano</th><th>Meta de ${brl(P.metaRenda)}</th></tr></thead><tbody>
+      ${anos.map(a => `<tr><td>Ano ${a.ano}</td><td>${num(a.aves)}</td><td>${brl(a.outras)}</td><td>${brl(a.porMes)}</td><td>${brl(a.porAno)}</td><td class="${a.atinge ? "pos" : ""}">${a.atinge ? "Atinge" : "Ainda não"}</td></tr>`).join("")}
+    </tbody></table></div>
+  </div>`;
+}
+function graficoCaixa(proj) {
+  const W = 760, H = 240, L = 64, R = 16, T = 16, B = 34;
+  const vals = proj.flatMap(r => [r.caixa, r.reserva, r.liquido]);
+  let lo = Math.min(0, ...vals), hi = Math.max(...vals); if (hi === lo) hi = lo + 1;
+  const step = Math.pow(10, Math.floor(Math.log10((hi - lo) / 4)));
+  const nice = [1, 2, 2.5, 5, 10].map(k => k * step).find(s => (hi - lo) / s <= 5) || step * 10;
+  lo = Math.floor(lo / nice) * nice; hi = Math.ceil(hi / nice) * nice;
+  const X = i => L + i * (W - L - R) / (proj.length - 1), Y = v => T + (hi - v) * (H - T - B) / (hi - lo);
+  const line = (k, c, w) => `<polyline fill="none" stroke="${c}" stroke-width="${w}" points="${proj.map((r, i) => `${X(i).toFixed(1)},${Y(r[k]).toFixed(1)}`).join(" ")}"/>`;
+  let ticks = ""; for (let v = lo; v <= hi + 1e-6; v += nice) ticks += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"${v === 0 ? ' stroke-width="1.5"' : ""}/><text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${(v / 1000).toLocaleString("pt-BR")} mil</text>`;
+  const xl = proj.map((r, i) => i % 3 === 0 ? `<text x="${X(i)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${rotuloMes(r.mes)}</text>` : "").join("");
+  const last = proj.length - 1;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Caixa do projeto, reserva e renda rural nos próximos 24 meses">${ticks}${xl}${line("reserva", "var(--ochre)", 2)}${line("liquido", "var(--muted)", 1.5)}${line("caixa", "var(--accent)", 2.5)}<circle cx="${X(last)}" cy="${Y(proj[last].caixa)}" r="4" fill="var(--accent)"/></svg>`;
+}
+function bindPlano() {
+  document.querySelectorAll("[data-fase]").forEach(b => b.addEventListener("click", () => salvarPlano({ ...S.plano, faseAtual: b.dataset.fase })));
+  document.querySelectorAll("[data-gate]").forEach(cb => cb.addEventListener("change", () => {
+    const [fid, gi] = cb.dataset.gate.split(":");
+    const fases = S.plano.fases.map(f => f.id !== fid ? f : { ...f, portao: f.portao.map((g, i) => i === Number(gi) ? { ...g, ok: cb.checked } : g) });
+    salvarPlano({ ...S.plano, fases });
+  }));
+  $("#addLote").addEventListener("click", () => {
+    const i = $("#lotes").children.length;
+    $("#lotes").insertAdjacentHTML("beforeend", `<div class="row"><input type="month" id="lm_${i}" style="max-width:180px"><input type="number" id="lq_${i}" value="100" style="max-width:120px"><span class="hint">aves</span></div>`);
+  });
+  $("#resetPrem").addEventListener("click", () => salvarPlano({ ...S.plano, premissas: { ...PLANO_PADRAO.premissas }, lotes: PLANO_PADRAO.lotes.map(l => ({ ...l })), anos: PLANO_PADRAO.anos.map(a => ({ ...a })) }));
+  $("#fPrem").addEventListener("submit", e => {
+    e.preventDefault();
+    const pr = { ...S.plano.premissas };
+    CAMPOS_PREMISSAS.forEach(([, cs]) => cs.forEach(([k, , t]) => { const v = $("#pr_" + k).value; pr[k] = t === "month" ? v : Number(v); }));
+    const lotes = []; for (let i = 0; $("#lm_" + i); i++) { const mes = $("#lm_" + i).value, qtd = Number($("#lq_" + i).value); if (mes && qtd > 0) lotes.push({ mes, qtd }); }
+    const anos = (S.plano.anos || []).map((a, i) => ({ ano: a.ano, aves: Number($("#aa_" + i).value) || 0, outras: Number($("#ao_" + i).value) || 0 }));
+    salvarPlano({ ...S.plano, premissas: pr, lotes, anos });
+  });
+}
+async function salvarPlano(novo) {
+  S.plano = novo; render();
+  try { await DB.set("config", "plano", novo); toast("Plano salvo."); } catch (e) { toast("Não foi possível salvar o plano."); }
+}
+
+/* ===================== quadro ===================== */
+function viewQuadro() {
+  const h = hoje();
+  const lista = S.tarefas.filter(t => (!S.filtroResp || t.responsavel === S.filtroResp) && (!S.filtroArea || t.area === S.filtroArea));
+  const card = t => `<div class="card" draggable="true" tabindex="0" data-id="${t.id}">
+      <div class="t">${esc(t.titulo)}</div>
+      <div class="meta"><span class="tag ${esc(t.area)}">${esc(t.area)}</span>${t.prazo ? `<span class="due ${t.prazo < h && t.status !== "feito" ? "late" : ""}">${esc(t.prazo.split("-").reverse().slice(0, 2).join("/"))}</span>` : ""}<span class="resp">${esc(t.responsavel)}</span></div>
+    </div>`;
+  return `
+  <div class="row"><div><h1>Quadro</h1><p class="lead" style="margin:0">Arraste os cartões entre as colunas. No celular, toque no cartão para mudar o status.</p></div><span class="spacer"></span><button class="btn" id="novaT">Nova tarefa</button></div>
+  <div class="filters" style="margin-top:14px">
+    <select id="fResp" aria-label="Filtrar por responsável"><option value="">Todos os responsáveis</option>${PESSOAS.map(p => `<option ${S.filtroResp === p ? "selected" : ""}>${p}</option>`).join("")}</select>
+    <select id="fArea" aria-label="Filtrar por área"><option value="">Todas as áreas</option>${AREAS.map(a => `<option ${S.filtroArea === a ? "selected" : ""}>${a}</option>`).join("")}</select>
+    ${S.tarefas.length ? "" : `<button class="btn ghost" id="seed2">Carregar tarefas da Fase 0</button>`}
+  </div>
+  <div class="board">${COLUNAS.map(([k, n]) => {
+    const cs = lista.filter(t => (t.status || "afazer") === k).sort((a, b) => (a.prazo || "9") < (b.prazo || "9") ? -1 : 1);
+    return `<section class="col" data-col="${k}"><h3>${n}<small>${cs.length}</small></h3>${cs.map(card).join("") || `<div class="hint" style="padding:8px">Nenhuma tarefa</div>`}</section>`;
+  }).join("")}</div>`;
+}
+function bindQuadro() {
+  $("#novaT").addEventListener("click", () => abrirTarefa(null));
+  const s = $("#seed2"); if (s) s.addEventListener("click", seedTarefas);
+  $("#fResp").addEventListener("change", e => { S.filtroResp = e.target.value; render(); });
+  $("#fArea").addEventListener("change", e => { S.filtroArea = e.target.value; render(); });
+  document.querySelectorAll(".card").forEach(c => {
+    c.addEventListener("click", () => abrirTarefa(c.dataset.id));
+    c.addEventListener("keydown", e => { if (e.key === "Enter") abrirTarefa(c.dataset.id); });
+    c.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", c.dataset.id); e.dataTransfer.effectAllowed = "move"; });
+  });
+  document.querySelectorAll(".col").forEach(col => {
+    col.addEventListener("dragover", e => { e.preventDefault(); col.classList.add("drop"); });
+    col.addEventListener("dragleave", () => col.classList.remove("drop"));
+    col.addEventListener("drop", async e => {
+      e.preventDefault(); col.classList.remove("drop");
+      const id = e.dataTransfer.getData("text/plain"), st = col.dataset.col;
+      const t = S.tarefas.find(x => x.id === id); if (!t || t.status === st) return;
+      t.status = st; render();
+      try { await DB.update("tarefas", id, { status: st, atualizadoEm: hoje(), ...(st === "feito" ? { concluidoEm: hoje() } : {}) }); } catch (err) { toast("Não foi possível mover a tarefa."); }
+    });
+  });
+}
+function abrirTarefa(id) {
+  const t = id ? S.tarefas.find(x => x.id === id) : { titulo: "", descricao: "", responsavel: "Marco", area: "Operacional", prazo: "", status: "afazer", fase: S.plano.faseAtual };
+  if (!t) return;
+  const dlg = $("#dlg");
+  dlg.innerHTML = `<form method="dialog" id="fT">
+    <h2>${id ? "Editar tarefa" : "Nova tarefa"}</h2>
+    <label class="f"><span>Título</span><input type="text" id="tTit" required value="${esc(t.titulo)}"></label>
+    <label class="f"><span>Detalhes</span><textarea id="tDesc">${esc(t.descricao)}</textarea></label>
+    <div class="form-grid">
+      <label class="f"><span>Responsável</span><select id="tResp">${PESSOAS.map(p => `<option ${t.responsavel === p ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+      <label class="f"><span>Área</span><select id="tArea">${AREAS.map(a => `<option ${t.area === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label class="f"><span>Prazo</span><input type="date" id="tPrazo" value="${esc(t.prazo)}"></label>
+      <label class="f"><span>Status</span><select id="tSt">${COLUNAS.map(([k, n]) => `<option value="${k}" ${t.status === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label class="f"><span>Fase</span><select id="tFase">${S.plano.fases.map(f => `<option value="${f.id}" ${t.fase === f.id ? "selected" : ""}>${esc(f.nome)}</option>`).join("")}</select></label>
+    </div>
+    <div class="row">${id ? `<button type="button" class="btn danger" id="tDel">Excluir</button>` : ""}<span class="spacer"></span><button type="button" class="btn ghost" id="tCancel">Cancelar</button><button class="btn" type="submit">Salvar</button></div>
+    <div class="row" id="tConfirm" hidden><span class="neg">Excluir esta tarefa de vez?</span><span class="spacer"></span><button type="button" class="btn ghost" id="tNo">Não</button><button type="button" class="btn danger" id="tYes">Sim, excluir</button></div>
+  </form>`;
+  dlg.showModal();
+  $("#tCancel").addEventListener("click", () => dlg.close());
+  if (id) {
+    $("#tDel").addEventListener("click", () => { $("#tConfirm").hidden = false; });
+    $("#tNo").addEventListener("click", () => { $("#tConfirm").hidden = true; });
+    $("#tYes").addEventListener("click", async () => { dlg.close(); try { await DB.remove("tarefas", id); toast("Tarefa excluída."); } catch (e) { toast("Não foi possível excluir."); } });
+  }
+  $("#fT").addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = { titulo: $("#tTit").value.trim(), descricao: $("#tDesc").value.trim(), responsavel: $("#tResp").value, area: $("#tArea").value, prazo: $("#tPrazo").value, status: $("#tSt").value, fase: $("#tFase").value, atualizadoEm: hoje() };
+    if (!v.titulo) return;
+    if (v.status === "feito" && t.status !== "feito") v.concluidoEm = hoje();
+    dlg.close();
+    try { if (id) await DB.update("tarefas", id, v); else await DB.add("tarefas", { ...v, criadoEm: hoje() }); toast("Tarefa salva."); } catch (err) { toast("Não foi possível salvar a tarefa."); }
+  });
+}
+
+/* ===================== caixa ===================== */
+function viewCaixa() {
+  const mes = S.mesCaixa;
+  const doMes = S.caixa.filter(c => (c.data || "").startsWith(mes)).sort((a, b) => a.data < b.data ? 1 : -1);
+  const tot = t => doMes.filter(c => c.tipo === t).reduce((a, c) => a + Number(c.valor || 0), 0);
+  const ent = tot("entrada"), sai = tot("saida");
+  const porCat = {};
+  doMes.filter(c => c.tipo === "saida").forEach(c => porCat[c.categoria] = (porCat[c.categoria] || 0) + Number(c.valor || 0));
+  const saldo = S.caixa.reduce((a, c) => a + (c.tipo === "entrada" ? 1 : -1) * Number(c.valor || 0), 0);
+  const invest = S.caixa.filter(c => c.tipo === "saida" && ["Aves", "Instalações", "Equipamentos"].includes(c.categoria)).reduce((a, c) => a + Number(c.valor || 0), 0);
+  return `
+  <div class="row"><div><h1>Caixa do projeto</h1><p class="lead" style="margin:0">Só o dinheiro do rural. As contas da casa ficam fora daqui; o que a casa coloca no projeto entra como "Aporte do casal".</p></div><span class="spacer"></span></div>
+  <div class="grid g4" style="margin-top:14px">
+    <div class="panel stat"><div class="k">Entradas no mês</div><div class="v pos">${brl(ent)}</div></div>
+    <div class="panel stat"><div class="k">Saídas no mês</div><div class="v neg">${brl(sai)}</div></div>
+    <div class="panel stat"><div class="k">Saldo do projeto</div><div class="v ${saldo < 0 ? "neg" : ""}">${brl(saldo)}</div></div>
+    <div class="panel stat"><div class="k">Investido até hoje</div><div class="v">${brl(invest)}</div><div class="s">Aves, instalações e equipamentos</div></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <form class="panel" id="fC"><h2>Novo lançamento</h2>
+      <div class="form-grid">
+        <label class="f"><span>Tipo</span><select id="cTipo"><option value="saida">Saída</option><option value="entrada">Entrada</option></select></label>
+        <label class="f"><span>Data</span><input type="date" id="cData" value="${hoje()}" required></label>
+        <label class="f"><span>Valor (R$)</span><input type="number" id="cValor" step="0.01" min="0" required></label>
+        <label class="f"><span>Categoria</span><select id="cCat">${CATEGORIAS.saida.map(c => `<option>${c}</option>`).join("")}</select></label>
+        <label class="f"><span>Atividade</span><select id="cAtv">${ATIVIDADES.map(a => `<option>${a}</option>`).join("")}</select></label>
+      </div>
+      <label class="f" style="margin-top:12px"><span>Descrição</span><input type="text" id="cDesc" placeholder="Ex.: 2 sacos de ração 40 kg"></label>
+      <div class="row" style="margin-top:12px"><button class="btn" type="submit">Lançar</button></div>
+    </form>
+    <div class="panel"><h2>Saídas do mês por categoria</h2>
+      ${Object.keys(porCat).length ? `<div class="tbl-wrap"><table><tbody>${Object.entries(porCat).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${brl2(v)}</td><td>${num(v / sai * 100)}%</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">Nenhuma saída neste mês.</div>`}
+    </div>
+  </div>
+  <div class="panel" style="margin-top:14px">
+    <div class="row"><h2 style="margin:0">Lançamentos</h2><span class="spacer"></span><label class="f" style="grid-template-columns:auto auto;align-items:center"><span>Mês</span><input type="month" id="cMes" value="${mes}"></label></div>
+    ${doMes.length ? `<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Atividade</th><th>Valor</th><th></th></tr></thead><tbody>
+      ${doMes.map(c => `<tr><td>${esc(c.data.split("-").reverse().join("/"))}</td><td style="text-align:left">${esc(c.descricao || "—")}</td><td style="text-align:left">${esc(c.categoria)}</td><td style="text-align:left">${esc(c.atividade)}</td><td class="${c.tipo === "entrada" ? "ent" : "sai"}">${c.tipo === "entrada" ? "+" : "−"} ${brl2(c.valor)}</td><td><button class="x" data-del="${c.id}" aria-label="Excluir lançamento">×</button></td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="empty">Nenhum lançamento em ${rotuloMes(mes)}.</div>`}
+    <div class="row" id="cConfirm" hidden style="margin-top:10px"><span class="neg">Excluir este lançamento?</span><span class="spacer"></span><button class="btn ghost" id="cNo">Não</button><button class="btn danger" id="cYes">Sim, excluir</button></div>
+  </div>`;
+}
+function bindCaixa() {
+  const fillCat = () => { $("#cCat").innerHTML = CATEGORIAS[$("#cTipo").value].map(c => `<option>${c}</option>`).join(""); };
+  $("#cTipo").addEventListener("change", fillCat);
+  $("#cMes").addEventListener("change", e => { S.mesCaixa = e.target.value || hoje().slice(0, 7); render(); });
+  $("#fC").addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = { tipo: $("#cTipo").value, data: $("#cData").value, valor: Number($("#cValor").value), categoria: $("#cCat").value, atividade: $("#cAtv").value, descricao: $("#cDesc").value.trim(), criadoEm: hoje(), autor: S.user?.email || "demo" };
+    if (!v.valor || !v.data) return;
+    try { await DB.add("caixa", v); toast("Lançamento registrado."); } catch (err) { toast("Não foi possível lançar."); }
+  });
+  let alvo = null;
+  document.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { alvo = b.dataset.del; $("#cConfirm").hidden = false; }));
+  const no = $("#cNo"), yes = $("#cYes");
+  if (no) no.addEventListener("click", () => { alvo = null; $("#cConfirm").hidden = true; });
+  if (yes) yes.addEventListener("click", async () => { if (!alvo) return; try { await DB.remove("caixa", alvo); toast("Lançamento excluído."); } catch (e) { toast("Não foi possível excluir."); } });
+}
+
+/* ===================== finanças pessoais ===================== */
+const PESSOAS_FIN = ["Marco", "Marina"];
+const CAT_APORTE = "Projeto rural (aporte)";
+const CAT_RESERVA = "Reserva / investimento";
+const CAT_DESP = ["Moradia", "Contas da casa", "Alimentação", "Transporte", "Filhos", "Saúde", "Educação", "Celular e internet", "Academia e bem-estar", "Lazer", "Vestuário", "Impostos e MEI", "Dívidas e parcelas", CAT_APORTE, CAT_RESERVA, "Outros"];
+const CAT_REC = ["Salário / contrato", "Renda extra", "13º / férias", "Outras entradas"];
+const FORMAS = ["Pix / débito", "Dinheiro", "Boleto", "Cartão da mãe", "Cartão próprio"];
+const TIPOS_SALDO = ["Poupança", "Conta corrente", "Investimento", "Reserva de emergência", "Dívida"];
+const FIN_PADRAO = { orcamentos: { Marco: {}, Marina: {} }, metaReservaMeses: 3 };
+
+const ativaNoMes = (f, m) => f.ativa !== false && (!f.inicio || f.inicio <= m) && (!f.fim || f.fim >= m);
+const pagFixa = (f, m) => S.finLanc.find(l => l.fixaId === f.id && l.mes === m);
+const soma = arr => arr.reduce((a, x) => a + (Number(x) || 0), 0);
+const finCfg = () => S.finCfg || FIN_PADRAO;
+
+function resumoPessoa(p, m) {
+  const fixas = S.finFixas.filter(f => f.pessoa === p && ativaNoMes(f, m));
+  const vari = S.finLanc.filter(l => l.pessoa === p && l.mes === m && !l.fixaId);
+  const val = f => { const l = pagFixa(f, m); return Number(l ? l.valor : f.valor) || 0; };
+  const recF = soma(fixas.filter(f => f.tipo === "receita").map(val));
+  const despF = soma(fixas.filter(f => f.tipo === "despesa").map(val));
+  const recV = soma(vari.filter(l => l.tipo === "receita").map(l => l.valor));
+  const despV = soma(vari.filter(l => l.tipo === "despesa").map(l => l.valor));
+  const pagoF = soma(fixas.filter(f => f.tipo === "despesa" && pagFixa(f, m)).map(val));
+  const porCat = {}, porCatV = {};
+  fixas.filter(f => f.tipo === "despesa").forEach(f => porCat[f.categoria] = (porCat[f.categoria] || 0) + val(f));
+  vari.filter(l => l.tipo === "despesa").forEach(l => { const v = Number(l.valor) || 0; porCat[l.categoria] = (porCat[l.categoria] || 0) + v; porCatV[l.categoria] = (porCatV[l.categoria] || 0) + v; });
+  const cartaoMae = soma(S.finLanc.filter(l => l.pessoa === p && l.mes === m && l.tipo === "despesa" && l.forma === "Cartão da mãe").map(l => l.valor));
+  const aporte = porCat[CAT_APORTE] || 0, reservaAp = porCat[CAT_RESERVA] || 0;
+  const renda = recF + recV, desp = despF + despV;
+  return { fixas, vari, renda, desp, despF, despV, pago: pagoF + despV, porCat, porCatV, cartaoMae, aporte, reservaAp, consumo: desp - aporte - reservaAp, saldo: renda - desp };
+}
+
+function confirmar(msg, ok = "Sim, excluir") {
+  return new Promise(res => {
+    const dlg = $("#dlg");
+    dlg.innerHTML = `<form method="dialog" id="fConf"><h2>Confirmar</h2><p>${esc(msg)}</p><div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="cfNo">Cancelar</button><button type="button" class="btn danger" id="cfYes">${esc(ok)}</button></div></form>`;
+    dlg.showModal();
+    $("#cfNo").addEventListener("click", () => { dlg.close(); res(false); });
+    $("#cfYes").addEventListener("click", () => { dlg.close(); res(true); });
+  });
+}
+
+async function addLanc(v) {
+  if (v.tipo === "despesa" && v.categoria === CAT_APORTE) {
+    v.caixaId = await DB.add("caixa", { tipo: "entrada", data: v.data, valor: v.valor, categoria: "Aporte do casal", atividade: "Geral", descricao: `Aporte de ${v.pessoa} (lançado em Finanças)`, criadoEm: hoje(), autor: S.user?.email || "demo" });
+  }
+  await DB.add("fin_lanc", v);
+}
+async function removeLanc(id) {
+  const l = S.finLanc.find(x => x.id === id); if (!l) return;
+  if (l.caixaId) { try { await DB.remove("caixa", l.caixaId); } catch (e) {} }
+  await DB.remove("fin_lanc", id);
+}
+
+function viewFinancas() {
+  const aba = S.finAba;
+  const seg = `<div class="seg" role="group" aria-label="Escolher aba">${["Marco", "Marina", "Casal"].map(k => `<button type="button" data-fin="${k}" aria-pressed="${aba === k}">${k === "Casal" ? "Conciliação do casal" : k}</button>`).join("")}</div>`;
+  const vazio = !S.finFixas.length && !S.finLanc.length;
+  return `<div class="row"><div><h1>Finanças</h1><p class="lead" style="margin:0">O dinheiro de cada um, da casa, e quanto sobra para a reserva e para o projeto.</p></div></div>
+  <div class="row" style="margin-top:14px">${seg}<span class="spacer"></span><label class="f" style="grid-template-columns:auto auto;align-items:center"><span>Mês</span><input type="month" id="fMes" value="${S.finMes}"></label></div>
+  ${vazio ? `<div class="panel" style="margin-top:14px"><h2>Começar</h2><p class="hint">Nenhuma conta cadastrada ainda. Cadastre as contas fixas de cada um com "Nova conta fixa", ou importe os dados iniciais que o Claude preparou.</p><div class="row" style="margin-top:10px"><button class="btn" type="button" id="finImport">Importar dados iniciais</button></div></div>` : ""}
+  ${aba === "Casal" ? viewCasal() : viewPessoa(aba)}`;
+}
+
+function viewPessoa(p) {
+  const m = S.finMes, r = resumoPessoa(p, m), h = hoje(), mesAtual = h.slice(0, 7) === m, dH = Number(h.slice(8));
+  const orc = (finCfg().orcamentos || {})[p] || {};
+  const fixasOrd = r.fixas.slice().sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === "receita" ? -1 : 1) || (a.dia || 99) - (b.dia || 99));
+  const linha = f => {
+    const l = pagFixa(f, m), desp = f.tipo === "despesa";
+    const atras = !l && desp && mesAtual && f.dia && f.dia < dH;
+    const vence = !l && desp && mesAtual && f.dia && f.dia >= dH && f.dia - dH <= 3;
+    const semValor = !Number(f.valor);
+    return `<tr class="${atras ? "late" : ""}"><td>${f.dia ? String(f.dia).padStart(2, "0") : "—"}</td>
+      <td style="text-align:left"><button type="button" class="linkbtn" data-efixa="${f.id}">${esc(f.descricao)}</button>${vence ? ` <span class="pill warnp">${f.dia === dH ? "vence hoje" : `vence em ${f.dia - dH} dia(s)`}</span>` : ""}${atras ? ` <span class="pill warnp">atrasada</span>` : ""}${semValor ? ` <span class="pill warnp">informar valor</span>` : ""}${f.fim ? ` <span class="hint">até ${rotuloMes(f.fim)}</span>` : ""}</td>
+      <td style="text-align:left" class="hide-sm">${esc(f.categoria)}</td>
+      <td class="${desp ? "" : "ent"}">${desp ? "" : "+ "}${brl2(l ? l.valor : f.valor)}</td>
+      <td>${l ? `<span class="paid">${desp ? "Pago" : "Recebido"} ✓</span> <button type="button" class="x" data-unpay="${l.id}" aria-label="Desfazer">↺</button>` : `<button type="button" class="btn sm ghost" data-pay="${f.id}">${desp ? "Paguei" : "Recebi"}</button>`}</td></tr>`;
+  };
+  const cats = Object.entries(r.porCat).sort((a, b) => b[1] - a[1]);
+  const maxCat = Math.max(1, ...cats.map(c => c[1]));
+  const orcCats = [...new Set([...Object.keys(orc).filter(k => Number(orc[k]) > 0), ...Object.keys(r.porCatV)])].filter(c => c !== CAT_APORTE && c !== CAT_RESERVA);
+  const vari = r.vari.slice().sort((a, b) => a.data < b.data ? 1 : -1);
+  return `
+  <div class="grid g4" style="margin-top:14px">
+    <div class="panel stat"><div class="k">Entradas do mês</div><div class="v pos">${brl(r.renda)}</div><div class="s">${p}</div></div>
+    <div class="panel stat"><div class="k">Saídas previstas</div><div class="v">${brl(r.desp)}</div><div class="s">Fixas ${brl(r.despF)} · dia a dia ${brl(r.despV)}</div></div>
+    <div class="panel stat"><div class="k">Já pago</div><div class="v">${brl(r.pago)}</div><div class="s">Falta pagar ${brl(Math.max(0, r.desp - r.pago))}</div></div>
+    <div class="panel stat"><div class="k">Sobra prevista</div><div class="v ${r.saldo < 0 ? "neg" : "pos"}">${brl(r.saldo)}</div><div class="s">${r.renda ? `Fixas usam ${num(r.despF / r.renda * 100)}% da renda` : "Cadastre a renda"}</div></div>
+  </div>
+  ${r.cartaoMae ? `<div class="alert bad" style="margin-top:14px"><b class="dot"></b><div>Neste mês ${p === "Marco" ? "você usou" : "foi usado"} <b>${brl2(r.cartaoMae)}</b> no cartão da mãe. Esse valor precisa ser devolvido a ela e já está contado nas saídas.</div></div>` : ""}
+
+  <div class="panel" style="margin-top:14px">
+    <div class="row"><h2 style="margin:0">Contas fixas de ${rotuloMes(m)}</h2><span class="spacer"></span><button class="btn ghost" type="button" id="novaFixa">Nova conta fixa</button></div>
+    <p class="hint" style="margin:6px 0 10px">Cadastradas uma vez, aparecem todo mês. Clique no nome para editar. Marque "Paguei" quando pagar.</p>
+    ${fixasOrd.length ? `<div class="tbl-wrap"><table><thead><tr><th>Dia</th><th style="text-align:left">Conta</th><th style="text-align:left" class="hide-sm">Categoria</th><th>Valor</th><th></th></tr></thead><tbody>${fixasOrd.map(linha).join("")}</tbody></table></div>` : `<div class="empty">Nenhuma conta fixa para ${esc(p)} neste mês.</div>`}
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <form class="panel" id="fV"><h2>Gasto do dia a dia</h2>
+      <div class="form-grid">
+        <label class="f"><span>Tipo</span><select id="vTipo"><option value="despesa">Saída</option><option value="receita">Entrada</option></select></label>
+        <label class="f"><span>Valor (R$)</span><input type="number" id="vValor" step="0.01" min="0" required inputmode="decimal"></label>
+        <label class="f"><span>Categoria</span><select id="vCat">${CAT_DESP.map(c => `<option>${c}</option>`).join("")}</select></label>
+        <label class="f"><span>Data</span><input type="date" id="vData" value="${mesAtual ? h : m + "-01"}" required></label>
+        <label class="f"><span>Pagou com</span><select id="vForma">${FORMAS.map(c => `<option>${c}</option>`).join("")}</select></label>
+      </div>
+      <label class="f" style="margin-top:12px"><span>Descrição</span><input type="text" id="vDesc" placeholder="Ex.: mercado da semana"></label>
+      <div class="row" style="margin-top:12px"><button class="btn" type="submit">Lançar</button><span class="hint">"${CAT_APORTE}" também entra no Caixa do projeto.</span></div>
+    </form>
+    <div class="panel"><div class="row"><h2 style="margin:0">Limites do dia a dia</h2><span class="spacer"></span><button class="btn ghost sm" type="button" id="editOrc">Definir limites</button></div>
+      <p class="hint" style="margin:6px 0 10px">Quanto pode gastar por mês em cada categoria variável.</p>
+      ${orcCats.length ? orcCats.map(c => { const g = r.porCatV[c] || 0, lim = Number(orc[c]) || 0, pct = lim ? g / lim * 100 : 100, cls = !lim ? "" : pct > 100 ? "bad" : pct > 80 ? "warn" : "";
+        return `<div class="catrow"><div>${esc(c)}</div><div class="bar"><i class="${cls}" style="width:${Math.min(100, pct)}%"></i></div><div class="r">${brl(g)}${lim ? ` de ${brl(lim)}` : ""}</div></div>`; }).join("") : `<div class="empty">Sem limites definidos.</div>`}
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="panel"><h2>Lançamentos do dia a dia</h2>
+      ${vari.length ? `<div class="tbl-wrap"><table><thead><tr><th>Data</th><th style="text-align:left">Descrição</th><th style="text-align:left">Categoria</th><th>Valor</th><th></th></tr></thead><tbody>
+      ${vari.map(l => `<tr><td>${esc(l.data.split("-").reverse().slice(0, 2).join("/"))}</td><td style="text-align:left">${esc(l.descricao || "—")}</td><td style="text-align:left">${esc(l.categoria)}<br><span class="hint">${esc(l.forma || "")}</span></td><td class="${l.tipo === "receita" ? "ent" : "sai"}">${l.tipo === "receita" ? "+" : "−"} ${brl2(l.valor)}</td><td><button type="button" class="x" data-dlanc="${l.id}" aria-label="Excluir lançamento">×</button></td></tr>`).join("")}
+      </tbody></table></div>` : `<div class="empty">Nenhum gasto lançado em ${rotuloMes(m)}.</div>`}
+    </div>
+    <div class="panel"><h2>Para onde foi o dinheiro</h2>
+      ${cats.length ? cats.map(([c, v]) => `<div class="catrow"><div>${esc(c)}</div><div class="bar"><i style="width:${v / maxCat * 100}%"></i></div><div class="r">${brl(v)}${r.renda ? ` · ${num(v / r.renda * 100)}%` : ""}</div></div>`).join("") : `<div class="empty">Sem saídas neste mês.</div>`}
+    </div>
+  </div>`;
+}
+
+function bindPessoa(p) {
+  const m = S.finMes;
+  $("#novaFixa").addEventListener("click", () => abrirFixa(null, p));
+  $("#editOrc").addEventListener("click", () => abrirOrc(p));
+  document.querySelectorAll("[data-efixa]").forEach(b => b.addEventListener("click", () => abrirFixa(b.dataset.efixa, p)));
+  document.querySelectorAll("[data-pay]").forEach(b => b.addEventListener("click", async () => {
+    const f = S.finFixas.find(x => x.id === b.dataset.pay); if (!f) return;
+    const h = hoje(), data = h.slice(0, 7) === m ? h : `${m}-${String(Math.min(28, f.dia || 1)).padStart(2, "0")}`;
+    try { await addLanc({ fixaId: f.id, mes: m, pessoa: f.pessoa, tipo: f.tipo, categoria: f.categoria, descricao: f.descricao, valor: Number(f.valor) || 0, data, forma: f.forma || "Pix / débito", criadoEm: h }); toast(f.tipo === "despesa" ? "Marcado como pago." : "Marcado como recebido."); } catch (e) { toast("Não foi possível salvar."); }
+  }));
+  document.querySelectorAll("[data-unpay]").forEach(b => b.addEventListener("click", async () => { try { await removeLanc(b.dataset.unpay); toast("Desfeito."); } catch (e) { toast("Não foi possível desfazer."); } }));
+  document.querySelectorAll("[data-dlanc]").forEach(b => b.addEventListener("click", async () => { if (await confirmar("Excluir este lançamento?")) { try { await removeLanc(b.dataset.dlanc); toast("Lançamento excluído."); } catch (e) { toast("Não foi possível excluir."); } } }));
+  $("#vTipo").addEventListener("change", () => { $("#vCat").innerHTML = ($("#vTipo").value === "receita" ? CAT_REC : CAT_DESP).map(c => `<option>${c}</option>`).join(""); });
+  $("#fV").addEventListener("submit", async e => {
+    e.preventDefault();
+    const data = $("#vData").value, valor = Number($("#vValor").value);
+    if (!valor || !data) return;
+    const v = { pessoa: p, tipo: $("#vTipo").value, valor, categoria: $("#vCat").value, data, mes: data.slice(0, 7), forma: $("#vForma").value, descricao: $("#vDesc").value.trim(), criadoEm: hoje(), autor: S.user?.email || "demo" };
+    try { await addLanc(v); toast("Lançado."); } catch (err) { toast("Não foi possível lançar."); }
+  });
+}
+
+function abrirFixa(id, pessoa) {
+  const f = id ? S.finFixas.find(x => x.id === id) : { pessoa, tipo: "despesa", descricao: "", categoria: "Moradia", valor: "", dia: "", forma: "Pix / débito", inicio: S.finMes, fim: "", ativa: true };
+  if (!f) return;
+  const dlg = $("#dlg");
+  const cats = t => (t === "receita" ? CAT_REC : CAT_DESP).map(c => `<option ${f.categoria === c ? "selected" : ""}>${c}</option>`).join("");
+  dlg.innerHTML = `<form method="dialog" id="fF">
+    <h2>${id ? "Editar conta fixa" : "Nova conta fixa"}</h2>
+    <label class="f"><span>Nome</span><input type="text" id="xDesc" required value="${esc(f.descricao)}" placeholder="Ex.: Aluguel"></label>
+    <div class="form-grid">
+      <label class="f"><span>Pessoa</span><select id="xPes">${PESSOAS_FIN.map(p => `<option ${f.pessoa === p ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+      <label class="f"><span>Tipo</span><select id="xTipo"><option value="despesa" ${f.tipo === "despesa" ? "selected" : ""}>Saída</option><option value="receita" ${f.tipo === "receita" ? "selected" : ""}>Entrada</option></select></label>
+      <label class="f"><span>Categoria</span><select id="xCat">${cats(f.tipo)}</select></label>
+      <label class="f"><span>Valor por mês (R$)</span><input type="number" id="xVal" step="0.01" min="0" value="${esc(f.valor)}"></label>
+      <label class="f"><span>Dia do vencimento</span><input type="number" id="xDia" min="1" max="31" value="${esc(f.dia || "")}"></label>
+      <label class="f"><span>Paga com</span><select id="xForma">${FORMAS.map(c => `<option ${f.forma === c ? "selected" : ""}>${c}</option>`).join("")}</select></label>
+      <label class="f"><span>Começa em</span><input type="month" id="xIni" value="${esc(f.inicio || "")}"></label>
+      <label class="f"><span>Termina em (opcional)</span><input type="month" id="xFim" value="${esc(f.fim || "")}"></label>
+    </div>
+    <label class="row" style="gap:8px"><input type="checkbox" id="xAtiva" ${f.ativa !== false ? "checked" : ""}> Conta ativa</label>
+    <div class="row">${id ? `<button type="button" class="btn danger" id="xDel">Excluir</button>` : ""}<span class="spacer"></span><button type="button" class="btn ghost" id="xCancel">Cancelar</button><button class="btn" type="submit">Salvar</button></div>
+  </form>`;
+  dlg.showModal();
+  $("#xTipo").addEventListener("change", () => { $("#xCat").innerHTML = cats($("#xTipo").value); });
+  $("#xCancel").addEventListener("click", () => dlg.close());
+  if (id) $("#xDel").addEventListener("click", async () => { dlg.close(); if (await confirmar(`Excluir a conta fixa "${f.descricao}"? Os pagamentos já marcados continuam no histórico.`)) { try { await DB.remove("fin_fixas", id); toast("Conta excluída."); } catch (e) { toast("Não foi possível excluir."); } } });
+  $("#fF").addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = { pessoa: $("#xPes").value, tipo: $("#xTipo").value, descricao: $("#xDesc").value.trim(), categoria: $("#xCat").value, valor: Number($("#xVal").value) || 0, dia: Number($("#xDia").value) || null, forma: $("#xForma").value, inicio: $("#xIni").value || S.finMes, fim: $("#xFim").value || "", ativa: $("#xAtiva").checked, atualizadoEm: hoje() };
+    if (!v.descricao) return;
+    dlg.close();
+    try { if (id) await DB.update("fin_fixas", id, v); else await DB.add("fin_fixas", { ...v, criadoEm: hoje() }); toast("Conta salva."); } catch (err) { toast("Não foi possível salvar."); }
+  });
+}
+
+function abrirOrc(p) {
+  const cfg = finCfg(), orc = (cfg.orcamentos || {})[p] || {};
+  const lista = CAT_DESP.filter(c => ![CAT_APORTE, CAT_RESERVA, "Moradia", "Impostos e MEI", "Dívidas e parcelas"].includes(c));
+  const dlg = $("#dlg");
+  dlg.innerHTML = `<form method="dialog" id="fO"><h2>Limites do dia a dia · ${esc(p)}</h2><p class="hint">Deixe em branco a categoria sem limite.</p>
+    <div class="form-grid">${lista.map((c, i) => `<label class="f"><span>${esc(c)}</span><input type="number" step="1" min="0" id="o_${i}" value="${esc(orc[c] || "")}"></label>`).join("")}</div>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="oCancel">Cancelar</button><button class="btn" type="submit">Salvar</button></div></form>`;
+  dlg.showModal();
+  $("#oCancel").addEventListener("click", () => dlg.close());
+  $("#fO").addEventListener("submit", async e => {
+    e.preventDefault();
+    const novo = {}; lista.forEach((c, i) => { const v = Number($("#o_" + i).value); if (v > 0) novo[c] = v; });
+    dlg.close();
+    const orcamentos = { ...(cfg.orcamentos || {}), [p]: novo };
+    try { await DB.set("config", "financas", { ...cfg, orcamentos }); toast("Limites salvos."); } catch (err) { toast("Não foi possível salvar."); }
+  });
+}
+
+function nivel(v, bom, aviso, maiorMelhor = true) {
+  if (maiorMelhor) return v >= bom ? "good" : v >= aviso ? "warn" : "bad";
+  return v <= bom ? "good" : v <= aviso ? "warn" : "bad";
+}
+const ROTULO_NIVEL = { good: "Saudável", warn: "Atenção", bad: "Crítico" };
+
+function dadosCasal(m) {
+  const rs = PESSOAS_FIN.map(p => ({ p, ...resumoPessoa(p, m) }));
+  const t = k => soma(rs.map(r => r[k]));
+  const renda = t("renda"), desp = t("desp"), despF = t("despF"), aporte = t("aporte"), reservaAp = t("reservaAp"), consumo = t("consumo"), cartaoMae = t("cartaoMae");
+  const sobra = renda - consumo;
+  const saldos = S.finSaldos;
+  const reserva = soma(saldos.filter(s => s.tipo === "Reserva de emergência").map(s => s.valor));
+  const dividas = soma(saldos.filter(s => s.tipo === "Dívida").map(s => s.valor));
+  const ativos = soma(saldos.filter(s => s.tipo !== "Dívida").map(s => s.valor));
+  return { rs, renda, desp, despF, aporte, reservaAp, consumo, cartaoMae, sobra, reserva, dividas, ativos };
+}
+
+function viewCasal() {
+  const m = S.finMes, d = dadosCasal(m), cfg = finCfg(), P = S.plano?.premissas || {};
+  const metaMeses = Number(cfg.metaReservaMeses) || 3, metaRes = d.consumo * metaMeses;
+  const taxa = d.renda ? d.sobra / d.renda * 100 : 0, pFix = d.renda ? d.despF / d.renda * 100 : 0, mesesRes = d.consumo ? d.reserva / d.consumo : 0;
+  const ind = [
+    ["Taxa de sobra", `${num(taxa)}%`, nivel(taxa, 15, 5), "Quanto da renda não vira consumo. Meta: 15% ou mais."],
+    ["Contas fixas / renda", `${num(pFix)}%`, nivel(pFix, 50, 70, false), "Até 50% é confortável; acima de 70% qualquer imprevisto aperta."],
+    ["Reserva de emergência", `${num(mesesRes, 1)} meses`, nivel(mesesRes, 3, 1), `Meta: ${metaMeses} meses de custo da casa (${brl(metaRes)}).`],
+    ["Cartão da mãe no mês", brl(d.cartaoMae), d.cartaoMae <= 0 ? "good" : d.cartaoMae <= d.renda * 0.1 ? "warn" : "bad", "Compra no cartão de outra pessoa é dívida, mesmo sem juros."],
+    ["Dívidas registradas", brl(d.dividas), d.dividas <= 0 ? "good" : d.dividas <= d.renda ? "warn" : "bad", "Some cartão, empréstimos e acordos em Saldos e dívidas."]
+  ];
+  const pct = Number(P.pctReserva) || 30;
+  const sugRes = d.sobra > 0 ? (d.reserva < metaRes ? d.sobra * pct / 100 : 0) : 0;
+  const sugProj = d.sobra > 0 ? d.sobra - sugRes : 0;
+  const saldos = S.finSaldos.slice().sort((a, b) => (a.tipo === "Dívida") - (b.tipo === "Dívida") || (b.valor || 0) - (a.valor || 0));
+  return `
+  <div class="grid g4" style="margin-top:14px">
+    <div class="panel stat"><div class="k">Renda do casal</div><div class="v pos">${brl(d.renda)}</div><div class="s">${d.rs.map(r => `${r.p} ${brl(r.renda)}`).join(" · ")}</div></div>
+    <div class="panel stat"><div class="k">Custo da casa</div><div class="v">${brl(d.consumo)}</div><div class="s">Sem contar reserva e aportes</div></div>
+    <div class="panel stat"><div class="k">Sobra do mês</div><div class="v ${d.sobra < 0 ? "neg" : "pos"}">${brl(d.sobra)}</div><div class="s">Já destinado: reserva ${brl(d.reservaAp)} · projeto ${brl(d.aporte)}</div></div>
+    <div class="panel stat"><div class="k">Patrimônio líquido</div><div class="v ${d.ativos - d.dividas < 0 ? "neg" : ""}">${brl(d.ativos - d.dividas)}</div><div class="s">Guardado ${brl(d.ativos)} · dívidas ${brl(d.dividas)}</div></div>
+  </div>
+
+  ${d.rs.filter(r => r.renda > 0 && r.desp === 0).map(r => `<p class="note" style="margin-top:14px">${r.p} ainda não cadastrou nenhuma despesa. Os indicadores do casal ficam otimistas até isso ser feito.</p>`).join("")}
+  <div class="panel" style="margin-top:14px"><h2>Saúde financeira</h2>
+    <div class="health">${ind.map(([k, v, l, s]) => `<div class="hcard ${l}"><div class="k">${k}</div><div class="v">${v}</div><div class="lvl ${l}">${ROTULO_NIVEL[l]}</div><div class="hint">${s}</div></div>`).join("")}</div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="panel"><h2>Quem paga o quê</h2>
+      <div class="tbl-wrap"><table><thead><tr><th>Pessoa</th><th>Entradas</th><th>Fixas</th><th>Dia a dia</th><th>Sobra</th></tr></thead><tbody>
+      ${d.rs.map(r => `<tr><td>${r.p}</td><td>${brl(r.renda)}</td><td>${brl(r.despF)}</td><td>${brl(r.despV)}</td><td class="${r.saldo < 0 ? "neg" : "pos"}">${brl(r.saldo)}</td></tr>`).join("")}
+      <tr class="hl"><td><b>Casal</b></td><td>${brl(d.renda)}</td><td>${brl(d.despF)}</td><td>${brl(d.desp - d.despF)}</td><td class="${d.renda - d.desp < 0 ? "neg" : "pos"}">${brl(d.renda - d.desp)}</td></tr>
+      </tbody></table></div>
+      ${d.rs.some(r => r.saldo < 0) ? `<p class="note" style="margin-top:10px">${d.rs.filter(r => r.saldo < 0).map(r => r.p).join(" e ")} fecha o mês no negativo sozinho. A conta da casa só fecha com a renda do outro.</p>` : ""}
+    </div>
+    <div class="panel"><h2>Para onde vai a sobra</h2>
+      ${d.sobra > 0 ? `<p class="hint">Regra do Plano: enquanto a reserva não chega a ${metaMeses} meses, ${pct}% da sobra vai para ela e o resto para o projeto.</p>
+      <div class="tbl-wrap" style="margin-top:8px"><table><thead><tr><th>Destino</th><th>Sugerido</th><th>Feito no mês</th></tr></thead><tbody>
+        <tr><td>Reserva de emergência</td><td>${brl(sugRes)}</td><td class="${d.reservaAp >= sugRes ? "pos" : ""}">${brl(d.reservaAp)}</td></tr>
+        <tr><td>Projeto rural</td><td>${brl(sugProj)}</td><td class="${d.aporte >= sugProj ? "pos" : ""}">${brl(d.aporte)}</td></tr>
+      </tbody></table></div>
+      <p class="hint" style="margin-top:8px">Para registrar, lance uma saída com a categoria "${CAT_RESERVA}" ou "${CAT_APORTE}" na aba de quem pagou. O aporte entra sozinho no Caixa do projeto.</p>`
+      : `<div class="alert bad"><b class="dot"></b><div>Não sobra dinheiro neste mês. Antes de investir no projeto, é preciso cortar gastos ou aumentar a renda.</div></div>`}
+      <h3 style="margin-top:16px">Plano x realidade</h3>
+      <div class="tbl-wrap"><table><thead><tr><th>Premissa do Plano</th><th>No Plano</th><th>Real em ${rotuloMes(m)}</th></tr></thead><tbody>
+        <tr><td>Renda do casal</td><td>${brl(P.rendaCasal)}</td><td>${brl(d.renda)}</td></tr>
+        <tr><td>Despesas da casa</td><td>${brl(P.despesasCasa)}</td><td>${brl(d.consumo)}</td></tr>
+      </tbody></table></div>
+      <div class="row" style="margin-top:10px"><button class="btn ghost" type="button" id="atuPlano">Atualizar o Plano com os números reais</button></div>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="panel"><h2>Saldos e dívidas</h2>
+      ${saldos.length ? `<div class="tbl-wrap"><table><thead><tr><th style="text-align:left">Conta</th><th>Valor</th><th></th></tr></thead><tbody>
+      ${saldos.map(s => `<tr><td style="text-align:left;white-space:normal"><button type="button" class="linkbtn" data-esaldo="${s.id}">${esc(s.nome)}</button><br><span class="hint">${esc(s.pessoa)} · ${esc(s.tipo)}</span></td><td class="${s.tipo === "Dívida" ? "sai" : "ent"}">${s.tipo === "Dívida" ? "−" : ""} ${brl2(s.valor)}</td><td><button type="button" class="x" data-dsaldo="${s.id}" aria-label="Excluir">×</button></td></tr>`).join("")}
+      </tbody></table></div><p class="hint" style="margin-top:6px">Clique no nome para atualizar o valor. Atualize uma vez por mês.</p>` : `<div class="empty">Nada registrado. Cadastre poupança, reserva e dívidas.</div>`}
+      <form id="fS" class="form-grid" style="margin-top:12px">
+        <label class="f"><span>Nome</span><input type="text" id="sNome" required placeholder="Ex.: Poupança Caixa"></label>
+        <label class="f"><span>De quem</span><select id="sPes"><option>Marco</option><option>Marina</option><option>Casal</option></select></label>
+        <label class="f"><span>Tipo</span><select id="sTipo">${TIPOS_SALDO.map(t => `<option>${t}</option>`).join("")}</select></label>
+        <label class="f"><span>Valor (R$)</span><input type="number" id="sVal" step="0.01" min="0" required></label>
+        <div style="align-self:end"><button class="btn" type="submit">Adicionar</button></div>
+      </form>
+    </div>
+    <div class="panel"><h2>Análise com o Claude</h2>
+      <p>O Claude faz o papel de consultor: lê estes números, aponta riscos, compara opções de investimento e projeta cenários bons e ruins.</p>
+      <p class="hint" style="margin-top:8px">Copie o resumo e cole na conversa com o Claude, ou peça a ele para ler o painel direto.</p>
+      <div class="row" style="margin-top:12px"><button class="btn" type="button" id="copiar">Copiar resumo para o Claude</button></div>
+      <label class="f" style="margin-top:14px;max-width:260px"><span>Meta de reserva (meses de custo da casa)</span><input type="number" id="metaRes" min="1" max="12" value="${metaMeses}"></label>
+      <div class="row" style="margin-top:12px"><button class="btn ghost sm" type="button" id="finImport2">Importar dados</button></div>
+    </div>
+  </div>`;
+}
+
+function resumoTexto() {
+  const meses = [somaMes(S.finMes, -2), somaMes(S.finMes, -1), S.finMes];
+  const L = [`RESUMO FINANCEIRO — Painel Projeto Rural (gerado em ${hoje().split("-").reverse().join("/")})`, ""];
+  for (const m of meses) {
+    const d = dadosCasal(m);
+    if (!d.renda && !d.desp) continue;
+    L.push(`## ${rotuloMes(m)}`);
+    d.rs.forEach(r => {
+      L.push(`${r.p}: entradas ${brl2(r.renda)} | saídas ${brl2(r.desp)} (fixas ${brl2(r.despF)}, dia a dia ${brl2(r.despV)}) | sobra ${brl2(r.saldo)} | cartão da mãe ${brl2(r.cartaoMae)}`);
+      const cats = Object.entries(r.porCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => `${c} ${brl2(v)}`).join("; ");
+      if (cats) L.push(`  por categoria: ${cats}`);
+    });
+    L.push(`Casal: renda ${brl2(d.renda)} | custo da casa ${brl2(d.consumo)} | sobra ${brl2(d.sobra)} | reserva ${brl2(d.reservaAp)} | aporte no projeto ${brl2(d.aporte)}`, "");
+  }
+  L.push("## Contas fixas cadastradas");
+  S.finFixas.filter(f => f.ativa !== false).forEach(f => L.push(`- ${f.pessoa} · ${f.tipo === "receita" ? "entrada" : "saída"} · ${f.descricao} (${f.categoria}) ${brl2(f.valor)}${f.dia ? ` · dia ${f.dia}` : ""}${f.fim ? ` · até ${f.fim}` : ""} · ${f.forma || ""}`));
+  L.push("", "## Saldos e dívidas");
+  S.finSaldos.forEach(s => L.push(`- ${s.nome} (${s.pessoa}, ${s.tipo}): ${brl2(s.valor)}`));
+  const o = finCfg().orcamentos || {};
+  L.push("", "## Limites do dia a dia");
+  PESSOAS_FIN.forEach(p => L.push(`- ${p}: ${Object.entries(o[p] || {}).map(([c, v]) => `${c} ${brl(v)}`).join("; ") || "nenhum"}`));
+  return L.join("\n");
+}
+
+async function importarDados(txt) {
+  const j = JSON.parse(txt);
+  const fixas = Array.isArray(j.fixas) ? j.fixas : [], saldos = Array.isArray(j.saldos) ? j.saldos : [];
+  if (!fixas.length && !saldos.length && !j.config) throw new Error("vazio");
+  const ini = hoje().slice(0, 7);
+  if (fixas.length) await DB.batchAdd("fin_fixas", fixas.map(f => ({ ativa: true, inicio: ini, fim: "", forma: "Pix / débito", dia: null, ...f, criadoEm: hoje() })));
+  if (saldos.length) await DB.batchAdd("fin_saldos", saldos.map(s => ({ ...s, atualizadoEm: hoje() })));
+  if (j.config) await DB.set("config", "financas", { ...finCfg(), ...j.config });
+  return fixas.length + saldos.length;
+}
+function abrirImport() {
+  const dlg = $("#dlg");
+  dlg.innerHTML = `<form method="dialog" id="fI"><h2>Importar dados</h2><p class="hint">Cole aqui o texto que o Claude preparou (começa com { ).${S.finFixas.length ? " Já existem contas cadastradas: importar de novo pode duplicar." : ""}</p>
+    <textarea id="iTxt" style="min-height:200px;font:12px var(--f-mono)"></textarea>
+    <div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="iCancel">Cancelar</button><button class="btn" type="submit">Importar</button></div></form>`;
+  dlg.showModal();
+  $("#iCancel").addEventListener("click", () => dlg.close());
+  $("#fI").addEventListener("submit", async e => {
+    e.preventDefault();
+    try { const n = await importarDados($("#iTxt").value); dlg.close(); toast(`${n} itens importados.`); } catch (err) { toast("O texto não está no formato esperado. Copie de novo o bloco inteiro."); }
+  });
+}
+
+function bindCasal() {
+  const m = S.finMes;
+  $("#atuPlano").addEventListener("click", () => { const d = dadosCasal(m); if (!d.renda) return toast("Cadastre as rendas primeiro."); salvarPlano({ ...S.plano, premissas: { ...S.plano.premissas, rendaCasal: Math.round(d.renda), despesasCasa: Math.round(d.consumo) } }); });
+  $("#metaRes").addEventListener("change", async e => { const v = Number(e.target.value) || 3; try { await DB.set("config", "financas", { ...finCfg(), metaReservaMeses: v }); toast("Meta de reserva salva."); } catch (err) { toast("Não foi possível salvar."); } });
+  $("#finImport2").addEventListener("click", abrirImport);
+  $("#copiar").addEventListener("click", () => {
+    const t = resumoTexto();
+    const fallback = () => { const dlg = $("#dlg"); dlg.innerHTML = `<form method="dialog"><h2>Resumo para o Claude</h2><p class="hint">Selecione tudo e copie.</p><textarea id="rTxt" style="min-height:260px;font:12px var(--f-mono)">${esc(t)}</textarea><div class="row"><span class="spacer"></span><button class="btn">Fechar</button></div></form>`; dlg.showModal(); $("#rTxt").select(); };
+    try { navigator.clipboard.writeText(t).then(() => toast("Resumo copiado. Cole na conversa com o Claude."), fallback); } catch (e) { fallback(); }
+  });
+  $("#fS").addEventListener("submit", async e => {
+    e.preventDefault();
+    const v = { nome: $("#sNome").value.trim(), pessoa: $("#sPes").value, tipo: $("#sTipo").value, valor: Number($("#sVal").value) || 0, atualizadoEm: hoje() };
+    if (!v.nome) return;
+    try { await DB.add("fin_saldos", v); toast("Adicionado."); } catch (err) { toast("Não foi possível adicionar."); }
+  });
+  document.querySelectorAll("[data-dsaldo]").forEach(b => b.addEventListener("click", async () => { if (await confirmar("Excluir este saldo?")) { try { await DB.remove("fin_saldos", b.dataset.dsaldo); toast("Excluído."); } catch (e) { toast("Não foi possível excluir."); } } }));
+  document.querySelectorAll("[data-esaldo]").forEach(b => b.addEventListener("click", () => {
+    const s = S.finSaldos.find(x => x.id === b.dataset.esaldo); if (!s) return;
+    const dlg = $("#dlg");
+    dlg.innerHTML = `<form method="dialog" id="fSE"><h2>${esc(s.nome)}</h2><label class="f"><span>Valor atual (R$)</span><input type="number" id="seVal" step="0.01" min="0" value="${esc(s.valor)}"></label><div class="row"><span class="spacer"></span><button type="button" class="btn ghost" id="seCancel">Cancelar</button><button class="btn" type="submit">Salvar</button></div></form>`;
+    dlg.showModal();
+    $("#seCancel").addEventListener("click", () => dlg.close());
+    $("#fSE").addEventListener("submit", async e => { e.preventDefault(); dlg.close(); try { await DB.update("fin_saldos", s.id, { valor: Number($("#seVal").value) || 0, atualizadoEm: hoje() }); toast("Valor atualizado."); } catch (err) { toast("Não foi possível salvar."); } });
+  }));
+}
+
+function bindFinancas() {
+  document.querySelectorAll("[data-fin]").forEach(b => b.addEventListener("click", () => { S.finAba = b.dataset.fin; render(); }));
+  $("#fMes").addEventListener("change", e => { S.finMes = e.target.value || hoje().slice(0, 7); render(); });
+  const im = $("#finImport"); if (im) im.addEventListener("click", abrirImport);
+  if (S.finAba === "Casal") bindCasal(); else bindPessoa(S.finAba);
+}
+
+/* ===================== inicialização ===================== */
+function iniciarDados() {
+  unsubs.forEach(u => u && u()); unsubs = [];
+  unsubs.push(DB.sub("tarefas", l => { S.tarefas = l; if (S.tab !== "plano") render(); }));
+  unsubs.push(DB.sub("caixa", l => { S.caixa = l; if (S.tab !== "plano") render(); }));
+  unsubs.push(DB.sub("fin_fixas", l => { S.finFixas = l; if (S.tab !== "plano") render(); }));
+  unsubs.push(DB.sub("fin_lanc", l => { S.finLanc = l; if (S.tab !== "plano") render(); }));
+  unsubs.push(DB.sub("fin_saldos", l => { S.finSaldos = l; if (S.tab !== "plano") render(); }));
+  unsubs.push(DB.sub("config", l => {
+    const fc = l.find(x => x.id === "financas");
+    S.finCfg = fc ? { ...FIN_PADRAO, ...fc } : { ...FIN_PADRAO };
+    const d = l.find(x => x.id === "plano");
+    const novo = d ? { ...PLANO_PADRAO, ...d, premissas: { ...PLANO_PADRAO.premissas, ...(d.premissas || {}) } } : PLANO_PADRAO;
+    delete novo.id;
+    const primeira = !S.plano;
+    S.plano = novo;
+    if (primeira || S.tab !== "plano") render();
+  }));
+}
+function mostrarQuem() {
+  const w = $("#who");
+  if (DEMO) { w.innerHTML = `<span class="demo-flag">MODO DEMONSTRAÇÃO</span>`; return; }
+  w.innerHTML = S.user ? `${esc(S.user.email)} <button class="btn ghost" id="sair" style="padding:4px 10px">Sair</button>` : "";
+  const s = $("#sair"); if (s) s.addEventListener("click", () => firebase.auth().signOut());
+}
+
+(function boot() {
+  const h = (location.hash || "").slice(1);
+  if (["painel", "plano", "quadro", "caixa", "financas"].includes(h)) S.tab = h;
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === S.tab ? "page" : "false"));
+  if (!DEMO) firebase.initializeApp(FIREBASE_CONFIG);
+  DB = criarDB();
+  if (DEMO) { mostrarQuem(); iniciarDados(); return; }
+  firebase.auth().onAuthStateChanged(u => {
+    S.user = u; mostrarQuem();
+    if (u) iniciarDados(); else { unsubs.forEach(x => x && x()); unsubs = []; S.plano = null; S.tarefas = []; S.caixa = []; render(); }
+  });
+})();
+</script>
+</body>
+</html>
