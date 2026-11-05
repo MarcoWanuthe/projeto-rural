@@ -176,7 +176,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "1057930729110",
   appId: "1:1057930729110:web:dca69c4c0ebd2230d4d4b7"
 };
-const VERSAO = "v2-2026-11-05";
+const VERSAO = "v3-2026-11-05";
 
 /* ===================== utilidades ===================== */
 const DEMO = !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === "COLE_AQUI" || typeof firebase === "undefined";
@@ -185,7 +185,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const brl = n => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 const brl2 = n => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const num = (n, d = 0) => (Number(n) || 0).toLocaleString("pt-BR", { maximumFractionDigits: d, minimumFractionDigits: d });
-const hoje = () => new Date().toISOString().slice(0, 10);
+const hoje = (dias = 0) => { const d = new Date(Date.now() + dias * 864e5); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const rotuloMes = ym => { const [y, m] = ym.split("-").map(Number); return `${MESES[m - 1]}/${String(y).slice(2)}`; };
 const somaMes = (ym, k) => { let [y, m] = ym.split("-").map(Number); m += k; y += Math.floor((m - 1) / 12); m = ((m - 1) % 12 + 12) % 12 + 1; return `${y}-${String(m).padStart(2, "0")}`; };
@@ -338,6 +338,7 @@ function viewLogin() {
     <p class="lead">Acesso restrito ao Marco e à Marina.</p>
     <label class="f"><span>E-mail</span><input type="email" id="lEmail" required autocomplete="username"></label>
     <label class="f"><span>Senha</span><input type="password" id="lSenha" required autocomplete="current-password"></label>
+    <label class="row" style="gap:8px;font-size:.9rem"><input type="checkbox" id="lShared"> Computador compartilhado: sair ao fechar o navegador</label>
     <button class="btn" type="submit">Entrar</button>
     <button class="btn ghost" type="button" id="lReset">Esqueci a senha</button>
   </form>`;
@@ -345,7 +346,10 @@ function viewLogin() {
 function bindLogin() {
   $("#fLogin").addEventListener("submit", async e => {
     e.preventDefault();
-    try { await firebase.auth().signInWithEmailAndPassword($("#lEmail").value.trim(), $("#lSenha").value); }
+    try {
+      await firebase.auth().setPersistence($("#lShared").checked ? firebase.auth.Auth.Persistence.SESSION : firebase.auth.Auth.Persistence.LOCAL);
+      await firebase.auth().signInWithEmailAndPassword($("#lEmail").value.trim(), $("#lSenha").value);
+    }
     catch (err) { toast("Não foi possível entrar. Confira e-mail e senha."); }
   });
   $("#lReset").addEventListener("click", async () => {
@@ -383,10 +387,13 @@ function viewPainel() {
     const rc = PESSOAS_FIN.map(p => resumoPessoa(p, mes)), sob = rc.reduce((a, r) => a + r.renda - r.desp, 0);
     if (sob < 0) alertas.push(["bad", `As finanças da casa fecham ${rotuloMes(mes)} no negativo (${brl(sob)}). Veja a aba Finanças.`]);
   }
+  const ub = S.sis?.ultimoBackup;
+  if (!ub || (Date.parse(h) - Date.parse(ub)) / 864e5 > 30) alertas.push(["warn", ub ? `Último backup em ${esc(ub.split("-").reverse().join("/"))}. Faça o backup do mês (botão no fim do Painel).` : "Nenhum backup feito ainda. Use o botão Baixar backup no fim do Painel."]);
   if (!alertas.length) alertas.push(["ok", "Nada atrasado. Siga com as tarefas da semana."]);
   return `
   <h1>Painel</h1>
   <p class="lead">${esc(fase.nome)} · ${esc(fase.datas)}. ${okG} de ${fase.portao.length} critérios do portão cumpridos.</p>
+  ${viewAssist()}
   <div class="grid g4">
     <div class="panel stat"><div class="k">Tarefas abertas</div><div class="v">${abertas.length}</div><div class="s">${semana.length} vencem nos próximos 7 dias</div></div>
     <div class="panel stat"><div class="k">Atrasadas</div><div class="v ${atrasadas.length ? "neg" : ""}">${atrasadas.length}</div><div class="s">${aguardando.length} aguardando terceiros</div></div>
@@ -404,9 +411,11 @@ function viewPainel() {
     ${abertas.length ? `<div class="tbl-wrap" style="margin-top:10px"><table><thead><tr><th>Tarefa</th><th>Responsável</th><th>Área</th><th>Prazo</th></tr></thead><tbody>
     ${abertas.slice().sort((a, b) => (a.prazo || "9") < (b.prazo || "9") ? -1 : 1).slice(0, 8).map(x => `<tr><td>${esc(x.titulo)}</td><td>${esc(x.responsavel)}</td><td>${esc(x.area)}</td><td class="${x.prazo && x.prazo < h ? "neg" : ""}">${x.prazo ? esc(x.prazo.split("-").reverse().join("/")) : "—"}</td></tr>`).join("")}
     </tbody></table></div>` : `<div class="empty">Nenhuma tarefa aberta. ${S.tarefas.length ? "" : `<br><button class="btn" id="seed1" style="margin-top:10px">Carregar tarefas da Fase 0</button>`}</div>`}
-  </div>`;
+  </div>
+  ${viewBackup()}`;
 }
 function bindPainel() {
+  bindAssist(); bindBackup();
   document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => go(b.dataset.go)));
   const s = $("#seed1"); if (s) s.addEventListener("click", seedTarefas);
 }
@@ -702,6 +711,7 @@ function viewFinancas() {
   const seg = `<div class="seg" role="group" aria-label="Escolher aba">${["Marco", "Marina", "Casal"].map(k => `<button type="button" data-fin="${k}" aria-pressed="${aba === k}">${k === "Casal" ? "Conciliação do casal" : k}</button>`).join("")}</div>`;
   const vazio = !S.finFixas.length && !S.finLanc.length;
   return `<div class="row"><div><h1>Finanças</h1><p class="lead" style="margin:0">O dinheiro de cada um, da casa, e quanto sobra para a reserva e para o projeto.</p></div></div>
+  <div style="margin-top:14px">${viewAssist()}</div>
   <div class="row" style="margin-top:14px">${seg}<span class="spacer"></span><label class="f" style="grid-template-columns:auto auto;align-items:center"><span>Mês</span><input type="month" id="fMes" value="${S.finMes}"></label></div>
   ${vazio ? `<div class="panel" style="margin-top:14px"><h2>Começar</h2><p class="hint">Nenhuma conta cadastrada ainda. Cadastre as contas fixas de cada um com "Nova conta fixa", ou importe os dados iniciais que o Claude preparou.</p><div class="row" style="margin-top:10px"><button class="btn" type="button" id="finImport">Importar dados iniciais</button></div></div>` : ""}
   ${aba === "Casal" ? viewCasal() : viewPessoa(aba)}`;
@@ -1015,10 +1025,145 @@ function bindCasal() {
 }
 
 function bindFinancas() {
+  bindAssist();
   document.querySelectorAll("[data-fin]").forEach(b => b.addEventListener("click", () => { S.finAba = b.dataset.fin; render(); }));
   $("#fMes").addEventListener("change", e => { S.finMes = e.target.value || hoje().slice(0, 7); render(); });
   const im = $("#finImport"); if (im) im.addEventListener("click", abrirImport);
   if (S.finAba === "Casal") bindCasal(); else bindPessoa(S.finAba);
+}
+
+/* ===================== assistente (sem IA, sem custo) ===================== */
+const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const PALAVRAS_CAT = [
+  ["Alimentação", ["mercado", "supermercado", "feira", "padaria", "acougue", "hortifruti", "lanche", "restaurante", "ifood", "almoco", "jantar", "cafe", "comida", "pizza", "alimentacao"]],
+  ["Transporte", ["gasolina", "combustivel", "etanol", "uber", "onibus", "metro", "estacionamento", "pedagio", "oficina", "mecanico", "pneu", "transporte"]],
+  ["Saúde", ["farmacia", "remedio", "medico", "consulta", "exame", "dentista", "hospital", "saude"]],
+  ["Educação", ["escola", "curso", "livro", "faculdade", "educacao"]],
+  ["Vestuário", ["roupa", "sapato", "tenis", "camisa", "calca", "vestuario"]],
+  ["Lazer", ["cinema", "passeio", "bar", "show", "viagem", "festa", "presente", "lazer"]],
+  ["Contas da casa", ["luz", "agua", "energia", "gas", "internet"]],
+  ["Celular e internet", ["celular", "recarga", "chip"]],
+  ["Academia e bem-estar", ["academia", "suplemento", "barbeiro", "cabelo", "salao"]],
+  ["Moradia", ["aluguel", "condominio", "moradia"]],
+  ["Impostos e MEI", ["mei", "imposto", "iptu", "ipva", "impostos"]],
+  [CAT_APORTE, ["racao", "galinha", "galinhas", "pintinho", "pintainha", "projeto", "galinheiro", "tela", "sementes", "adubo"]],
+  [CAT_RESERVA, ["reserva", "guardei", "poupei", "investi"]],
+  ["Filhos", ["pensao", "bale", "jiu", "jiujitsu", "filhos", "maria", "luiz"]]
+];
+const temPalavra = (n, w) => new RegExp(`(^|[^a-z0-9])${w}([^a-z0-9]|$)`).test(n);
+function acharCat(n) { for (const [c, ws] of PALAVRAS_CAT) if (ws.some(w => temPalavra(n, w))) return c; return null; }
+function pessoaPadrao() {
+  if (S.tab === "financas" && PESSOAS_FIN.includes(S.finAba)) return S.finAba;
+  return norm(S.user?.email || "").startsWith("mmendex") ? "Marina" : "Marco";
+}
+function interpretar(txt) {
+  let n = norm(txt).trim();
+  if (!n) return null;
+  if (/\?\s*$/.test(n) || /^(quanto|quantos|qual|quais|o que|oque|quando|tem |como|cade|resumo)/.test(n)) return { tipo: "pergunta", n };
+  let data = hoje();
+  if (temPalavra(n, "ontem")) data = hoje(-1);
+  const md = n.match(/(^|\s)(\d{1,2})\/(\d{1,2})(\/\d{2,4})?(\s|$)/);
+  if (md) { const y = hoje().slice(0, 4); data = `${y}-${md[3].padStart(2, "0")}-${md[2].padStart(2, "0")}`; n = n.replace(md[0], " "); }
+  const mv = n.match(/(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/);
+  if (!mv) return { tipo: "erro", msg: "Não encontrei o valor. Escreva, por exemplo: mercado 85" };
+  let vs = mv[1];
+  vs = vs.includes(",") ? vs.replace(/\./g, "").replace(",", ".") : (/^\d{1,3}(\.\d{3})+$/.test(vs) ? vs.replace(/\./g, "") : vs);
+  const valor = Number(vs);
+  if (!(valor > 0)) return { tipo: "erro", msg: "O valor precisa ser maior que zero." };
+  const receita = /(^|\s)(recebi|ganhei|entrou|entrada|vendi|salario|pagamento recebido)(\s|$)/.test(n);
+  let forma = "Pix / débito";
+  if (/cartao (da )?mae|(^|\s)mae(\s|$)/.test(n)) forma = "Cartão da mãe";
+  else if (/(^|\s)(dinheiro|especie)(\s|$)/.test(n)) forma = "Dinheiro";
+  else if (/boleto/.test(n)) forma = "Boleto";
+  else if (/cartao|credito/.test(n)) forma = "Cartão próprio";
+  const pessoa = temPalavra(n, "marina") ? "Marina" : temPalavra(n, "marco") ? "Marco" : pessoaPadrao();
+  const categoria = receita ? (/salario/.test(n) ? "Salário / contrato" : "Renda extra") : (acharCat(n) || "Outros");
+  return { tipo: "lanc", v: { pessoa, tipo: receita ? "receita" : "despesa", valor, categoria, data, mes: data.slice(0, 7), forma, descricao: String(txt).trim().slice(0, 80), criadoEm: hoje(), autor: S.user?.email || "demo", origem: "assistente" } };
+}
+function responder(n) {
+  const m = hoje().slice(0, 7), mesRef = /mes passado/.test(n) ? somaMes(m, -1) : m;
+  const casal = /(^|\s)(nos|casal|a gente|casa|familia)(\s|\?|$)/.test(n);
+  const p = temPalavra(n, "marina") ? "Marina" : temPalavra(n, "marco") ? "Marco" : pessoaPadrao();
+  const quem = casal ? PESSOAS_FIN : [p], rot = casal ? "o casal" : p;
+  const rs = quem.map(x => resumoPessoa(x, mesRef));
+  const rm = rotuloMes(mesRef);
+  if (/cartao|(^|\s)mae(\s|\?|$)/.test(n)) {
+    const tot = soma(rs.map(r => r.cartaoMae));
+    const div = soma(S.finSaldos.filter(s => s.tipo === "Dívida" && /mae/.test(norm(s.nome))).map(s => s.valor));
+    return `Em ${rm}, ${rot} lançou ${brl2(tot)} no cartão da mãe. Saldo a devolver registrado em Saldos e dívidas: ${brl2(div)}.`;
+  }
+  if (/falta pagar|a pagar|vence|vencimento|pendente|contas do mes/.test(n)) {
+    const pend = S.finFixas.filter(f => quem.includes(f.pessoa) && f.tipo === "despesa" && ativaNoMes(f, m) && !pagFixa(f, m)).sort((a, b) => (a.dia || 99) - (b.dia || 99));
+    if (!pend.length) return `Nenhuma conta fixa pendente em ${rotuloMes(m)} para ${rot}.`;
+    return `Faltam ${pend.length} contas (${brl2(soma(pend.map(f => f.valor)))}): ` + pend.map(f => `${f.descricao} ${brl2(f.valor)}${f.dia ? ` (dia ${f.dia})` : ""}`).join("; ") + ".";
+  }
+  if (/projeto|caixa/.test(n)) {
+    const sc = S.caixa.reduce((a, c) => a + (c.tipo === "entrada" ? 1 : -1) * Number(c.valor || 0), 0);
+    return `O Caixa do projeto tem ${brl2(sc)}.`;
+  }
+  if (/sobra|saldo|sobrou|quanto tenho|resumo/.test(n)) {
+    const renda = soma(rs.map(r => r.renda)), desp = soma(rs.map(r => r.desp));
+    return `Em ${rm}, ${rot}: entradas ${brl2(renda)}, saídas previstas ${brl2(desp)}, sobra ${brl2(renda - desp)}.`;
+  }
+  const cat = acharCat(n) || CAT_DESP.find(c => n.includes(norm(c)));
+  if (/gast|paguei|despesa/.test(n) || cat) {
+    if (cat) return `Em ${rm}, ${rot} tem ${brl2(soma(rs.map(r => r.porCat[cat] || 0)))} em ${cat}.`;
+    return `Em ${rm}, ${rot} tem ${brl2(soma(rs.map(r => r.desp)))} de saídas (fixas ${brl2(soma(rs.map(r => r.despF)))}, dia a dia ${brl2(soma(rs.map(r => r.despV)))}).`;
+  }
+  return null;
+}
+function viewAssist() {
+  return `<form class="panel" id="fA" autocomplete="off">
+    <div class="row"><h2 style="margin:0">Assistente</h2><span class="hint">Lance um gasto ou faça uma pergunta, em texto simples.</span></div>
+    <div class="row" style="margin-top:10px;flex-wrap:nowrap"><input type="text" id="aTxt" style="min-width:0;flex:1" placeholder="Ex.: mercado 85 cartão da mãe · quanto gastei com mercado? · o que falta pagar?" aria-label="Mensagem para o assistente"><button class="btn" type="submit">Enviar</button></div>
+    <div id="aOut" style="margin-top:10px" aria-live="polite"></div>
+  </form>`;
+}
+function bindAssist() {
+  const f = $("#fA"); if (!f) return;
+  const out = $("#aOut");
+  const dizer = (txt, cls = "hint") => { out.innerHTML = ""; const p = document.createElement("p"); p.className = cls; p.textContent = txt; out.appendChild(p); return p; };
+  f.addEventListener("submit", e => {
+    e.preventDefault();
+    const txt = $("#aTxt").value, r = interpretar(txt);
+    if (!r) return;
+    if (r.tipo === "erro") return dizer(r.msg);
+    if (r.tipo === "pergunta") {
+      const resp = responder(r.n);
+      return dizer(resp || "Ainda não sei responder isso. Tente: quanto gastei com mercado? · o que falta pagar? · quanto sobra este mês? · cartão da mãe? Para conselhos e análises, use o botão Copiar resumo para o Claude, em Finanças → Conciliação.", resp ? "" : "hint");
+    }
+    const v = r.v;
+    const p = dizer(`Vou lançar: ${v.tipo === "receita" ? "entrada" : "saída"} de ${brl2(v.valor)} · ${v.categoria} · ${v.forma} · ${v.pessoa} · ${v.data.split("-").reverse().join("/")}.`, "");
+    const row = document.createElement("div"); row.className = "row"; row.style.marginTop = "8px";
+    const ok = document.createElement("button"); ok.type = "button"; ok.className = "btn sm"; ok.textContent = "Confirmar";
+    const ed = document.createElement("button"); ed.type = "button"; ed.className = "btn sm ghost"; ed.textContent = "Corrigir categoria";
+    const no = document.createElement("button"); no.type = "button"; no.className = "btn sm ghost"; no.textContent = "Cancelar";
+    const sel = document.createElement("select"); sel.style.width = "auto"; sel.hidden = true; sel.setAttribute("aria-label", "Categoria");
+    (v.tipo === "receita" ? CAT_REC : CAT_DESP).forEach(c => { const o = document.createElement("option"); o.textContent = c; if (c === v.categoria) o.selected = true; sel.appendChild(o); });
+    row.append(ok, ed, sel, no); out.appendChild(row);
+    ed.addEventListener("click", () => { sel.hidden = false; ed.hidden = true; sel.focus(); });
+    sel.addEventListener("change", () => { v.categoria = sel.value; p.textContent = `Vou lançar: ${v.tipo === "receita" ? "entrada" : "saída"} de ${brl2(v.valor)} · ${v.categoria} · ${v.forma} · ${v.pessoa} · ${v.data.split("-").reverse().join("/")}.`; });
+    no.addEventListener("click", () => { out.innerHTML = ""; });
+    ok.addEventListener("click", async () => { ok.disabled = true; try { await addLanc(v); toast("Lançado."); $("#aTxt").value = ""; out.innerHTML = ""; } catch (err) { ok.disabled = false; toast("Não foi possível lançar."); } });
+  });
+}
+
+/* ===================== backup ===================== */
+function viewBackup() {
+  const ub = S.sis?.ultimoBackup, ur = S.sis?.ultimaRevisao;
+  const d = s => s ? esc(s.split("-").reverse().join("/")) : null;
+  return `<div class="panel" style="margin-top:14px"><div class="row"><h2 style="margin:0">Segurança e backup</h2><span class="spacer"></span><button class="btn ghost" type="button" id="bkp">Baixar backup</button></div>
+    <p class="hint" style="margin-top:8px">Último backup: ${d(ub) || "nunca"} · Última revisão de segurança: ${d(ur) || "pendente"}. O arquivo tem todos os dados, inclusive os financeiros: guarde num lugar só seu.</p></div>`;
+}
+function bindBackup() { const b = $("#bkp"); if (b) b.addEventListener("click", baixarBackup); }
+async function baixarBackup() {
+  const dados = { geradoEm: new Date().toISOString(), versao: VERSAO, tarefas: S.tarefas, caixa: S.caixa, plano: S.plano, financas: { config: S.finCfg, fixas: S.finFixas, lancamentos: S.finLanc, saldos: S.finSaldos } };
+  const blob = new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `backup-projeto-rural-${hoje()}.json`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  const { id, ...resto } = S.sis || {};
+  try { await DB.set("config", "sistema", { ...resto, ultimoBackup: hoje() }); } catch (e) {}
+  toast("Backup baixado.");
 }
 
 /* ===================== inicialização ===================== */
@@ -1030,6 +1175,7 @@ function iniciarDados() {
   unsubs.push(DB.sub("fin_lanc", l => { S.finLanc = l; if (S.tab !== "plano") render(); }));
   unsubs.push(DB.sub("fin_saldos", l => { S.finSaldos = l; if (S.tab !== "plano") render(); }));
   unsubs.push(DB.sub("config", l => {
+    const sis = l.find(x => x.id === "sistema"); S.sis = sis || {};
     const fc = l.find(x => x.id === "financas");
     S.finCfg = fc ? { ...FIN_PADRAO, ...fc } : { ...FIN_PADRAO };
     const d = l.find(x => x.id === "plano");
